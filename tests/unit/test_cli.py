@@ -41,8 +41,8 @@ def test_main_missing_input_dir(tmp_path):
     assert main(["--input", str(missing)]) == 1
 
 
-def test_main_success_with_samples_dir(samples_dir):
-    assert main(["--input", str(samples_dir), "--output", "output"]) == 0
+def test_main_success_with_samples_dir(samples_dir, tmp_path):
+    assert main(["--input", str(samples_dir), "--output", str(tmp_path / "out")]) == 0
 
 
 def test_cli_module_help():
@@ -60,3 +60,20 @@ def test_cli_module_help():
 
 def test_openai_without_key_fails():
     assert main(["--provider", "openai"]) == 1
+
+
+def test_cli_ingestion_continues_on_mixed_batch(tmp_path, capsys):
+    (tmp_path / "ok.txt").write_text("Late delivery of order 12.")
+    (tmp_path / "empty.txt").write_text(" ")
+    (tmp_path / "notes.csv").write_text("a,b")
+    out = tmp_path / "out"
+    assert main(["--input", str(tmp_path), "--output", str(out)]) == 0
+    stdout = capsys.readouterr().out
+    assert "successful=" in stdout
+    assert "failed=" in stdout
+    assert "skipped=" in stdout
+    assert "EMPTY_DOCUMENT" in stdout
+    assert "UNSUPPORTED_FILE_TYPE" in stdout
+    assert "Late delivery" not in stdout
+    assert (out / "final_report.csv").is_file()
+    assert list((out / "structured_data").glob("*.json"))

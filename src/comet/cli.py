@@ -8,7 +8,10 @@ from pathlib import Path
 from comet import __version__
 from comet.config import Settings
 from comet.exceptions import ConfigurationError
+from comet.llm import create_provider
 from comet.logging_config import setup_logging
+from comet.models import ProcessingStatus
+from comet.workflow import run_offline_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +93,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         settings = settings_from_args(args)
         settings.validate_provider_credentials()
+        provider = create_provider(settings)
     except ConfigurationError as exc:
         print(f"Configuration error: {exc}", file=sys.stderr)
         return 1
@@ -107,15 +111,41 @@ def main(argv: list[str] | None = None) -> int:
         logger.error("Input directory does not exist: %s", settings.input_dir)
         return 1
 
-    settings.output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        results, report_path = run_offline_pipeline(
+            settings.input_dir,
+            settings.output_dir,
+            provider,
+            overwrite=settings.overwrite,
+        )
+    except OSError as exc:
+        logger.error("Output directory is not writable: %s", exc)
+        return 1
 
-    # Batch processing is implemented in later phases.
-    logger.info(
-        "Phase 0 foundation ready. Full batch workflow arrives in later phases."
-    )
+    successful = failed = skipped = 0
+    for item in results:
+        if item.status == ProcessingStatus.SUCCESS:
+            successful += 1
+            print(f"success  {item.document_id}  {item.source_file}")
+        elif item.status == ProcessingStatus.SKIPPED:
+            skipped += 1
+            print(f"skipped  {item.document_id}  {item.source_file}  {item.error_code}")
+        else:
+            failed += 1
+            print(f"failed   {item.document_id}  {item.source_file}  {item.error_code}")
+
     print(
-        "Comet AI foundation is ready. "
-        "Batch processing will be wired in upcoming phases."
+        f"discovered={len(results)} successful={successful} "
+        f"failed={failed} skipped={skipped}"
+    )
+    print(f"report={report_path}")
+    logger.info(
+        "Run complete discovered=%s successful=%s failed=%s skipped=%s report=%s",
+        len(results),
+        successful,
+        failed,
+        skipped,
+        report_path,
     )
     return 0
 
