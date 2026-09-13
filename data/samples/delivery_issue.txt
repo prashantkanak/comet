@@ -1,0 +1,10 @@
+Delivery Complaint — Fictional Sample
+
+Customer: Alex Rivera
+Phone: +1-555-010-2233
+
+Order #ORD-55291 was supposed to arrive on September 5 but has not been
+delivered. The tracking page shows "delivered" but nothing was left at
+my address. I need the package located or a replacement sent.
+
+This is the second late delivery this month.

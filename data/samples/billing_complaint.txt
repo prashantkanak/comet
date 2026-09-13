@@ -1,0 +1,15 @@
+Customer Complaint — Fictional Sample
+
+From: Jane Doe <jane.doe@example.com>
+Date: 2025-08-12
+
+Subject: Incorrect charge on August invoice
+
+I was charged $149.99 for a premium subscription I cancelled in July.
+My account number is ACCT-88421. Please review the August invoice and
+issue a refund for the incorrect charge.
+
+I have attached my cancellation confirmation email from July 3rd.
+
+Regards,
+Jane Doe
