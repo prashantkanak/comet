@@ -23,4 +23,7 @@ class GroqLLMProvider(OpenAILLMProvider):
             base_url=GROQ_BASE_URL,
             # Qwen3.8 thinks by default; that breaks JSON extraction.
             request_extras={"reasoning_effort": "none"},
+            # Groq free-tier often allows one in-flight request; email||summary
+            # concurrency otherwise 429s the summary call.
+            serialize_requests=True,
         )

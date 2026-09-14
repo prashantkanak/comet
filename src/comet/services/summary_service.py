@@ -30,9 +30,13 @@ def generate_case_summary(provider: LLMProvider, case: ComplaintCase) -> str:
     except SummaryGenerationError:
         raise
     except LLMError as exc:
-        raise SummaryGenerationError("Case summary generation failed") from exc
+        raise SummaryGenerationError(
+            f"Case summary generation failed: {exc}"
+        ) from exc
     except Exception as exc:
-        raise SummaryGenerationError("Case summary generation failed") from exc
+        raise SummaryGenerationError(
+            f"Case summary generation failed: {type(exc).__name__}: {exc}"
+        ) from exc
 
     if not draft or not draft.strip():
         raise SummaryGenerationError("Case summary generation returned empty text")

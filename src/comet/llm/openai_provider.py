@@ -2,6 +2,8 @@
 
 import json
 import logging
+import threading
+import time
 
 from comet.exceptions import LLMProviderError, StructuredOutputValidationError
 from comet.llm.prompts import (
@@ -31,6 +33,7 @@ class OpenAILLMProvider:
         client: object | None = None,
         base_url: str | None = None,
         request_extras: dict[str, object] | None = None,
+        serialize_requests: bool = False,
     ) -> None:
         if client is None:
             from openai import OpenAI
@@ -42,6 +45,8 @@ class OpenAILLMProvider:
         self._client = client
         self.model_name = model_name or DEFAULT_OPENAI_MODEL
         self._request_extras = request_extras or {}
+        self._request_lock = threading.Lock() if serialize_requests else None
+        self._sleep = time.sleep
         self.token_usage = TokenUsage()
 
     def extract_case(self, document_text: str, *, repair: bool = False) -> ComplaintCase:
@@ -76,11 +81,29 @@ class OpenAILLMProvider:
         if json_object:
             kwargs["response_format"] = {"type": "json_object"}
         kwargs.update(self._request_extras)
-        try:
-            response = self._client.chat.completions.create(**kwargs)
-        except Exception as exc:
-            _reraise_provider_error(exc)
-            raise
+        if self._request_lock is None:
+            return self._complete_once(kwargs)
+        with self._request_lock:
+            return self._complete_once(kwargs)
+
+    def _complete_once(self, kwargs: dict[str, object]) -> str:
+        response = None
+        for attempt in range(3):
+            try:
+                response = self._client.chat.completions.create(**kwargs)
+                break
+            except Exception as exc:
+                if attempt == 2 or not _is_transient(exc):
+                    _reraise_provider_error(exc)
+                    raise
+                logger.warning(
+                    "openai_retry attempt=%s type=%s",
+                    attempt + 1,
+                    type(exc).__name__,
+                )
+                self._sleep(0.4 * (attempt + 1))
+        if response is None:
+            raise LLMProviderError("LLM provider request failed")
         recorded = usage_from_response(response)
         if recorded is not None:
             prompt, completion, total = recorded
@@ -122,14 +145,15 @@ def _parse_case_json(content: str) -> ComplaintCase:
         ) from exc
 
 
-def _reraise_provider_error(exc: Exception) -> None:
-    transient = False
+def _is_transient(exc: Exception) -> bool:
+    status = getattr(exc, "status_code", None)
+    if status in {408, 409, 429, 500, 502, 503, 504}:
+        return True
     try:
         from openai import APIConnectionError, APIStatusError, APITimeoutError, RateLimitError
 
-        transient = isinstance(
-            exc, (APIConnectionError, APITimeoutError, RateLimitError)
-        )
+        if isinstance(exc, (APIConnectionError, APITimeoutError, RateLimitError)):
+            return True
         if isinstance(exc, APIStatusError) and getattr(exc, "status_code", None) in {
             408,
             409,
@@ -139,9 +163,14 @@ def _reraise_provider_error(exc: Exception) -> None:
             503,
             504,
         }:
-            transient = True
+            return True
     except ImportError:
         pass
+    return False
+
+
+def _reraise_provider_error(exc: Exception) -> None:
+    transient = _is_transient(exc)
     logger.warning(
         "openai_provider_error type=%s transient=%s",
         type(exc).__name__,

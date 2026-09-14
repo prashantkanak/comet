@@ -91,3 +91,45 @@ def test_factory_groq_honors_model_override():
     provider = create_provider(settings)
     assert isinstance(provider, GroqLLMProvider)
     assert provider.model_name == "llama-3.1-8b-instant"
+
+
+def test_groq_serializes_overlapping_chat_calls():
+    import threading
+    import time
+
+    in_flight = 0
+    max_in_flight = 0
+    guard = threading.Lock()
+
+    class _SlowCompletions(_Completions):
+        def create(self, **kwargs: object) -> _Response:
+            nonlocal in_flight, max_in_flight
+            with guard:
+                in_flight += 1
+                max_in_flight = max(max_in_flight, in_flight)
+            time.sleep(0.05)
+            with guard:
+                in_flight -= 1
+            return super().create(**kwargs)
+
+    completions = _SlowCompletions(
+        [json.dumps(VALID_PAYLOAD), json.dumps(VALID_PAYLOAD)]
+    )
+    client = _StubClient([])
+    client.completions = completions
+    client.chat = type("Chat", (), {"completions": completions})()
+    provider = GroqLLMProvider(api_key="gsk-test", client=client)
+    case = ComplaintCase.model_validate(VALID_PAYLOAD)
+
+    email_thread = threading.Thread(
+        target=provider.generate_customer_email, args=(case,)
+    )
+    summary_thread = threading.Thread(
+        target=provider.generate_case_summary, args=(case,)
+    )
+    email_thread.start()
+    summary_thread.start()
+    email_thread.join()
+    summary_thread.join()
+    assert max_in_flight == 1
+    assert len(completions.calls) == 2

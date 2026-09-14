@@ -117,6 +117,18 @@ def test_openai_malformed_output_fails_after_retry_limit():
     assert len(client.completions.calls) == 2
 
 
+def test_openai_retries_transient_then_succeeds():
+    class _Busy(Exception):
+        status_code = 429
+
+    client = _StubClient([_Busy(), json.dumps(VALID_PAYLOAD)])
+    provider = OpenAILLMProvider(api_key="sk-test", client=client)
+    provider._sleep = lambda _seconds: None
+    case = provider.extract_case("Charged twice.")
+    assert case.issue_description == "Charged twice for one month."
+    assert len(client.completions.calls) == 2
+
+
 def test_openai_transport_error_is_provider_error():
     client = _StubClient([ConnectionError("network down")])
     provider = OpenAILLMProvider(api_key="sk-test", client=client)

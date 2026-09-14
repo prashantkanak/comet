@@ -28,29 +28,20 @@ def _inject_theme() -> None:
     st.markdown(
         """
         <style>
-          :root {
-            --paper: #f4f4f5;
-            --surface: #ffffff;
-            --ink: #18181b;
-            --muted: #71717a;
-            --rule: rgba(24, 24, 27, .1);
-            --stamp: #172554;
-          }
-          html, .stApp { background: var(--paper); color: var(--ink); -webkit-font-smoothing: antialiased; }
           .block-container { max-width: 100% !important; padding-top: 1.25rem; padding-bottom: 4rem; padding-left: 1.5rem; padding-right: 1.5rem; }
           .stDeployButton { display: none !important; }
           footer { visibility: hidden; }
           [data-testid="stMetric"] { font-variant-numeric: tabular-nums; }
           [data-testid="stFileUploader"] {
-            background: #fafafa;
-            border: 1px dashed rgba(24, 24, 27, .22);
+            background: var(--secondary-background-color);
+            border: 1px dashed color-mix(in srgb, var(--text-color) 28%, transparent);
             border-radius: 10px;
             padding: .15rem .55rem .4rem;
           }
           [data-testid="stButton"] button { border-radius: 8px; font-weight: 600; }
           .app-header {
             align-items: baseline;
-            background: var(--stamp);
+            background: #172554;
             border-radius: 12px;
             color: #f8fafc;
             display: flex;
@@ -86,7 +77,7 @@ def _inject_theme() -> None:
             background: transparent !important;
             border: 0 !important;
             box-shadow: none !important;
-            color: var(--stamp) !important;
+            color: var(--primary-color) !important;
             font-size: 13px !important;
             font-weight: 600 !important;
             min-height: auto !important;
@@ -94,10 +85,11 @@ def _inject_theme() -> None:
             text-decoration: underline;
           }
           .artifact-label {
-            color: var(--muted);
+            color: var(--text-color);
             font-size: 12px;
             font-weight: 700;
             margin: 1.1rem 0 .4rem;
+            opacity: .7;
           }
         </style>
         """,
