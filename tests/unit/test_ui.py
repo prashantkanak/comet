@@ -68,11 +68,14 @@ def test_stage_uploads_keeps_multiple_files_in_one_folder(tmp_path):
     assert names == ["case.txt", "notes.docx"]
 
 
-def test_display_report_rows_uses_basename_for_source_file(tmp_path, monkeypatch):
+def test_display_report_rows_uses_basename_for_source_file(tmp_path, monkeypatch, capsys):
     staged = stage_upload("case.txt", b"I was charged twice on my invoice.", tmp_path / "tmp")
     settings = build_settings(str(staged.parent), str(tmp_path / "out"), True)
     monkeypatch.setattr("comet.ui.pipeline.create_provider", lambda _settings: MockLLMProvider())
     summary = run_batch(settings)
+    logs = capsys.readouterr().err
+    assert "request_llm provider=mock" in logs
+    assert "credential_set=False" in logs
     displayed = display_report_rows(summary.report_path)
     assert displayed[0]["source_file"] == "case.txt"
     assert "/" not in displayed[0]["source_file"]

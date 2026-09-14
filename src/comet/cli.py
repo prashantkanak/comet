@@ -39,7 +39,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--provider",
-        choices=["mock", "openai", "gemini"],
+        choices=["mock", "openai", "gemini", "groq"],
         default=None,
         help="LLM provider (default: mock or LLM_PROVIDER env var)",
     )

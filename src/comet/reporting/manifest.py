@@ -34,12 +34,14 @@ def write_run_manifest(
     config: dict[str, Any],
     results: list[DocumentResult],
     report_path: Path,
+    token_usage: dict[str, int] | None = None,
 ) -> Path:
     payload = {
         "started_at": started_at.isoformat(),
         "completed_at": completed_at.isoformat(),
         "config": config,
         "counts": count_results(results),
+        "token_usage": token_usage,
         "report_path": str(report_path),
         "results": [
             {

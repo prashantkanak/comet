@@ -93,6 +93,7 @@ def test_batch_of_twelve_mixed_files_has_accurate_counts(tmp_path):
     assert "openai_api_key" not in dumped.lower()
     assert "sk-" not in dumped
     assert manifest["config"]["llm_provider"] == "mock"
+    assert manifest["token_usage"] is None
     assert len(manifest["results"]) == 12
     names = {Path(item.source_file).name: item for item in summary.results}
     assert names["empty.txt"].status is ProcessingStatus.FAILED

@@ -215,9 +215,9 @@ class DocumentResult(BaseModel):
 
 | Setting | Example | Notes |
 |---|---|---|
-| `LLM_PROVIDER` | `mock`, `openai`, `gemini` | `mock` is safe default for development |
+| `LLM_PROVIDER` | `mock`, `openai`, `gemini`, `groq` | `mock` is safe default for development |
 | `MODEL_NAME` | provider-specific | explicit and reproducible |
-| `OPENAI_API_KEY` / `GEMINI_API_KEY` | unset in Git | exactly one required for real provider |
+| `OPENAI_API_KEY` / `GEMINI_API_KEY` / `GROQ_API_KEY` | unset in Git | exactly one required for real provider |
 | `MAX_LLM_ATTEMPTS` | `2` | one validation/transport retry maximum |
 | `INPUT_DIR` | `data` | CLI normally supplies this |
 | `OUTPUT_DIR` | `output` | artifacts only |
@@ -316,7 +316,7 @@ Arguments:
 |---|---|---|
 | `--input PATH` | `data` | directory to scan |
 | `--output PATH` | `output` | output directory |
-| `--provider` | environment/default | `mock`, `openai`, or `gemini` |
+| `--provider` | environment/default | `mock`, `openai`, `gemini`, or `groq` |
 | `--max-attempts INT` | `2` | max LLM extraction attempts |
 | `--log-level LEVEL` | `INFO` | console/file verbosity |
 | `--overwrite` | false | permit replacement of existing matching artifacts |

@@ -8,6 +8,7 @@ from comet.exceptions import ConfigurationError, LLMProviderError, StructuredOut
 from comet.config import Settings
 from comet.llm.factory import create_provider
 from comet.llm.gemini_provider import GeminiLLMProvider
+from comet.llm.groq_provider import GroqLLMProvider
 from comet.llm.mock_provider import MockLLMProvider
 from comet.llm.openai_provider import OpenAILLMProvider
 from comet.llm.prompts import EXTRACTION_REPAIR
@@ -79,6 +80,14 @@ def test_factory_returns_gemini_provider():
     provider = create_provider(settings)
     assert isinstance(provider, GeminiLLMProvider)
     assert provider.model_name == "gemini-2.5-flash"
+
+
+def test_factory_returns_groq_provider(monkeypatch):
+    monkeypatch.setenv("MODEL_NAME", "")
+    settings = Settings(llm_provider="groq", groq_api_key="gsk-test")
+    provider = create_provider(settings)
+    assert isinstance(provider, GroqLLMProvider)
+    assert provider.model_name == "qwen/qwen3.8-27b"
 
 
 def test_openai_parses_valid_json():

@@ -8,6 +8,7 @@ from pathlib import Path
 from comet.ids import build_document_id
 from comet.ingestion.discovery import discover_documents
 from comet.llm.base import LLMProvider
+from comet.llm.usage import usage_dict
 from comet.models import DocumentResult, ProcessingStatus
 from comet.reporting import count_results, write_final_report, write_run_manifest
 from comet.services.artifact_service import ensure_output_dirs
@@ -24,6 +25,7 @@ class BatchRunSummary:
     started_at: datetime
     completed_at: datetime
     counts: dict[str, int]
+    token_usage: dict[str, int] | None = None
 
 
 class BatchProcessor:
@@ -101,6 +103,7 @@ class BatchProcessor:
 
         report_path = write_final_report(self.output_dir / "final_report.csv", results)
         completed_at = datetime.now(timezone.utc)
+        token_usage = usage_dict(self.provider)
         config = {
             "llm_provider": self.llm_provider,
             "model_name": self.model_name,
@@ -116,6 +119,7 @@ class BatchProcessor:
             config=config,
             results=results,
             report_path=report_path,
+            token_usage=token_usage,
         )
         counts = count_results(results)
         logger.info(
@@ -126,6 +130,16 @@ class BatchProcessor:
             counts["skipped"],
             report_path,
         )
+        if token_usage:
+            logger.info(
+                "batch_llm_usage model=%s calls=%s prompt_tokens=%s "
+                "completion_tokens=%s total_tokens=%s",
+                self.model_name or "",
+                token_usage["calls"],
+                token_usage["prompt_tokens"],
+                token_usage["completion_tokens"],
+                token_usage["total_tokens"],
+            )
         return BatchRunSummary(
             results=results,
             report_path=report_path,
@@ -133,4 +147,5 @@ class BatchProcessor:
             started_at=started_at,
             completed_at=completed_at,
             counts=counts,
+            token_usage=token_usage,
         )

@@ -82,5 +82,6 @@ def test_batch_maps_exhausted_transient_llm_error(tmp_path, monkeypatch):
     names = {Path(item.source_file).name: item for item in summary.results}
     assert names["ok.txt"].status is ProcessingStatus.FAILED
     assert names["ok.txt"].error_code == "LLM_PROVIDER_ERROR"
+    assert names["ok.txt"].error_message == "rate limited"
     assert names["notes.csv"].status is ProcessingStatus.SKIPPED
     assert summary.counts["discovered"] == 2

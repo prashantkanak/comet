@@ -12,6 +12,7 @@ from comet.llm.prompts import (
     extraction_user_message,
     summary_user_message,
 )
+from comet.llm.usage import TokenUsage, usage_from_response
 from comet.models import ComplaintCase
 
 logger = logging.getLogger(__name__)
@@ -28,13 +29,20 @@ class OpenAILLMProvider:
         model_name: str | None = None,
         *,
         client: object | None = None,
+        base_url: str | None = None,
+        request_extras: dict[str, object] | None = None,
     ) -> None:
         if client is None:
             from openai import OpenAI
 
-            client = OpenAI(api_key=api_key)
+            kwargs: dict[str, object] = {"api_key": api_key}
+            if base_url:
+                kwargs["base_url"] = base_url
+            client = OpenAI(**kwargs)
         self._client = client
         self.model_name = model_name or DEFAULT_OPENAI_MODEL
+        self._request_extras = request_extras or {}
+        self.token_usage = TokenUsage()
 
     def extract_case(self, document_text: str, *, repair: bool = False) -> ComplaintCase:
         content = self._complete(
@@ -67,11 +75,25 @@ class OpenAILLMProvider:
         }
         if json_object:
             kwargs["response_format"] = {"type": "json_object"}
+        kwargs.update(self._request_extras)
         try:
             response = self._client.chat.completions.create(**kwargs)
         except Exception as exc:
             _reraise_provider_error(exc)
             raise
+        recorded = usage_from_response(response)
+        if recorded is not None:
+            prompt, completion, total = recorded
+            self.token_usage.add(prompt, completion, total)
+            logger.info(
+                "llm_usage model=%s prompt_tokens=%s completion_tokens=%s "
+                "total_tokens=%s calls=%s",
+                self.model_name,
+                prompt,
+                completion,
+                total,
+                self.token_usage.calls,
+            )
         return _message_content(response)
 
 

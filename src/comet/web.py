@@ -28,7 +28,12 @@ from comet.workflow.batch import BatchRunSummary
 
 logger = logging.getLogger(__name__)
 app = FastAPI(title=PRODUCT_NAME)
+_NO_STORE = {"Cache-Control": "no-store"}
 _SAMPLE_FILES = {path.name: (path, mime) for _label, _title, path, mime in SAMPLE_DOCUMENTS}
+
+
+def _html(body: str, status_code: int = 200) -> HTMLResponse:
+    return HTMLResponse(body, status_code=status_code, headers=_NO_STORE)
 
 
 def _page(*, error: str | None = None, summary: BatchRunSummary | None = None) -> str:
@@ -43,6 +48,17 @@ def _page(*, error: str | None = None, summary: BatchRunSummary | None = None) -
             f"<div class='metric'><span>Documents processed</span><strong>{processed}</strong></div>",
             "<h3>Consolidated report</h3>",
         ]
+        if summary.token_usage:
+            usage = summary.token_usage
+            blocks.insert(
+                3,
+                "<div class='metrics'>"
+                f"<div><span>LLM calls</span><strong>{usage['calls']}</strong></div>"
+                f"<div><span>Prompt tokens</span><strong>{usage['prompt_tokens']}</strong></div>"
+                f"<div><span>Completion tokens</span><strong>{usage['completion_tokens']}</strong></div>"
+                f"<div><span>Total tokens</span><strong>{usage['total_tokens']}</strong></div>"
+                "</div>",
+            )
         rows = display_report_rows(summary.report_path)
         if rows:
             headers = "".join(f"<th>{escape(key)}</th>" for key in rows[0])
@@ -53,7 +69,9 @@ def _page(*, error: str | None = None, summary: BatchRunSummary | None = None) -
                 for row in rows
             )
             blocks.append(
+                "<div class='table-wrap'>"
                 f"<table><thead><tr>{headers}</tr></thead><tbody>{body}</tbody></table>"
+                "</div>"
             )
         if summary.results:
             blocks.append("<h3>Documents</h3><div class='tabs'>")
@@ -127,15 +145,24 @@ def _page(*, error: str | None = None, summary: BatchRunSummary | None = None) -
       --paper: #f4f4f5; --surface: #ffffff; --ink: #18181b; --muted: #71717a;
       --rule: rgba(24, 24, 27, .1); --stamp: #172554;
     }}
-    html, body {{ background: var(--paper); color: var(--ink); font-family: ui-sans-serif, system-ui, sans-serif; margin: 0; }}
-    main {{ max-width: 1180px; margin: 0 auto; padding: 1.25rem 1.25rem 4rem; }}
+    html, body {{
+      background: var(--paper); color: var(--ink);
+      font-family: ui-sans-serif, system-ui, sans-serif; margin: 0;
+      min-height: 100dvh; overflow-x: hidden;
+    }}
+    *, *::before, *::after {{ box-sizing: border-box; }}
+    main {{ width: 100%; max-width: none; padding: 1.25rem 1.5rem 4rem; }}
     .app-header {{
       align-items: baseline; background: var(--stamp); border-radius: 12px; color: #f8fafc;
       display: flex; flex-wrap: wrap; gap: .55rem 1.15rem; margin: 0 0 1.25rem; padding: 1rem 1.25rem;
     }}
     .app-header h1 {{ color: #fff; font-size: 22px; font-weight: 700; margin: 0; text-wrap: balance; }}
     .app-header .expand {{ color: #cbd5e1; font-size: 13px; margin: 0; text-wrap: pretty; }}
-    .card {{ background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 1.15rem 1.25rem 1.3rem; }}
+    .card {{ background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; min-width: 0; padding: 1.15rem 1.25rem 1.3rem; }}
+    .results {{ min-width: 0; }}
+    .table-wrap {{ max-width: 100%; overflow-x: auto; }}
+    table {{ border-collapse: collapse; font-size: .8rem; min-width: 100%; }}
+    th, td {{ border: 1px solid #e4e4e7; padding: .4rem .5rem; text-align: left; white-space: nowrap; }}
     .upload-head {{ align-items: baseline; display: flex; justify-content: space-between; gap: 1rem; }}
     .upload-head h2 {{ font-size: 1.2rem; margin: 0; }}
     .samples-hover {{ position: relative; }}
@@ -157,10 +184,8 @@ def _page(*, error: str | None = None, summary: BatchRunSummary | None = None) -
     .error {{ background: #fef2f2; border-radius: 8px; color: #b91c1c; padding: .75rem 1rem; }}
     .metric, .metrics div {{ background: #fafafa; border: 1px solid var(--rule); border-radius: 10px; padding: .8rem 1rem; width: fit-content; margin: .75rem 0 1rem; }}
     .metric span, .metrics span {{ color: var(--muted); display: block; font-size: .8rem; }}
-    .metrics {{ display: grid; gap: .75rem; grid-template-columns: repeat(4, 1fr); }}
-    table {{ border-collapse: collapse; font-size: .8rem; width: 100%; }}
-    th, td {{ border: 1px solid #e4e4e7; padding: .4rem .5rem; text-align: left; }}
-    .tabs {{ display: flex; flex-wrap: wrap; gap: .35rem 0; margin-top: 1rem; }}
+    .metrics {{ display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); }}
+    .tabs {{ display: flex; flex-wrap: wrap; gap: .35rem 0; margin-top: 1rem; min-width: 0; }}
     .tab-input {{ position: absolute; opacity: 0; pointer-events: none; }}
     .tab-label {{
       background: #fafafa; border: 1px solid var(--rule); border-bottom: 0; border-radius: 8px 8px 0 0;
@@ -200,13 +225,14 @@ def _page(*, error: str | None = None, summary: BatchRunSummary | None = None) -
     </section>
     <p class="foot">{escape(PRODUCT_NAME)} v{escape(__version__)}</p>
   </main>
+  <script>history.replaceState(null, "", location.pathname);</script>
 </body>
 </html>"""
 
 
 @app.get("/", response_class=HTMLResponse)
-def home() -> str:
-    return _page()
+def home() -> HTMLResponse:
+    return _html(_page())
 
 
 @app.get("/samples/{filename}")
@@ -226,16 +252,16 @@ async def process_files(files: list[UploadFile] = File(...)) -> HTMLResponse:
         settings = build_settings(str(input_dir), str(default_output_dir()), True)
         summary = run_batch(settings)
     except ConfigurationError as exc:
-        return HTMLResponse(_page(error=str(exc)), status_code=400)
+        return _html(_page(error=str(exc)), status_code=400)
     except OSError as exc:
         logger.exception("ui_process_os_error")
-        return HTMLResponse(
+        return _html(
             _page(error=f"The run could not access its files: {exc}"),
             status_code=500,
         )
     except Exception as exc:
         logger.exception("ui_process_failed")
-        return HTMLResponse(
+        return _html(
             _page(
                 error=(
                     "The workflow stopped unexpectedly. "
@@ -244,4 +270,4 @@ async def process_files(files: list[UploadFile] = File(...)) -> HTMLResponse:
             ),
             status_code=500,
         )
-    return HTMLResponse(_page(summary=summary))
+    return _html(_page(summary=summary))

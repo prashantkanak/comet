@@ -75,7 +75,7 @@ python -m comet.cli --input data/samples --output output --provider mock --overw
 |---|---|---|
 | `--input` | `data` | Directory to scan (recursive) |
 | `--output` | `output` | Artifact root |
-| `--provider` | `mock` | `mock`, `openai`, or `gemini` |
+| `--provider` | `mock` | `mock`, `openai`, `gemini`, or `groq` |
 | `--max-attempts` | `2` | Extraction attempts (one repair/retry) |
 | `--log-level` | `INFO` | Console/file verbosity |
 | `--overwrite` | off | Replace existing artifacts for the same document id |
@@ -145,13 +145,23 @@ python -m comet.cli --input data/samples --output output --provider gemini --ove
 
 Gemini structured extraction uses the official Google GenAI SDK's JSON response schema, followed by the same Pydantic validation and bounded retry path as OpenAI.
 
+## Groq (optional)
+
+Set `GROQ_API_KEY` in `.env`. Default model is `qwen/qwen3.8-27b`.
+
+```bash
+python -m comet.cli --input data/samples --output output --provider groq --overwrite
+```
+
+Groq uses the OpenAI-compatible Chat Completions API (`https://api.groq.com/openai/v1`).
+
 ## Layout
 
 ```text
 src/comet/           application package
   cli.py             entry point
   ingestion/         discovery, loaders, normalization
-  llm/               prompts, mock, OpenAI adapter, factory
+  llm/               prompts, mock, OpenAI / Gemini / Groq adapters, factory
   models/            ComplaintCase, DocumentResult, enums
   services/          extraction, email, summary, artifacts
   workflow/          DocumentProcessor, BatchProcessor
@@ -187,4 +197,4 @@ pip install -e ".[dev]"
 python -c "from app import app; print(app.title)"
 ```
 
-Redeploy after pushing `app.py`, `vercel.json`, and FastAPI deps. Set `OPENAI_API_KEY` / `GEMINI_API_KEY` in the Vercel project if you use those providers. Mock mode needs no keys. Function timeout is 60s (`vercel.json`).
+Redeploy after pushing `app.py`, `vercel.json`, and FastAPI deps. Set `OPENAI_API_KEY` / `GEMINI_API_KEY` / `GROQ_API_KEY` in the Vercel project if you use those providers. Mock mode needs no keys. Function timeout is 60s (`vercel.json`).

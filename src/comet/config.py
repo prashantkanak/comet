@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from comet.exceptions import ConfigurationError
 
-LLMProviderName = Literal["mock", "openai", "gemini"]
+LLMProviderName = Literal["mock", "openai", "gemini", "groq"]
 
 
 class Settings(BaseSettings):
@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     model_name: str | None = Field(default=None, alias="MODEL_NAME")
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
     gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
+    groq_api_key: str | None = Field(default=None, alias="GROQ_API_KEY")
     max_llm_attempts: int = Field(default=2, ge=1, alias="MAX_LLM_ATTEMPTS")
     input_dir: Path = Field(default=Path("data"), alias="INPUT_DIR")
     output_dir: Path = Field(default=Path("output"), alias="OUTPUT_DIR")
@@ -39,7 +40,13 @@ class Settings(BaseSettings):
             return value.strip().lower()
         return value
 
-    @field_validator("model_name", "openai_api_key", "gemini_api_key", mode="before")
+    @field_validator(
+        "model_name",
+        "openai_api_key",
+        "gemini_api_key",
+        "groq_api_key",
+        mode="before",
+    )
     @classmethod
     def empty_optional_str_is_none(cls, value: object) -> object:
         if isinstance(value, str) and not value.strip():
@@ -60,6 +67,10 @@ class Settings(BaseSettings):
         if self.llm_provider == "gemini" and not self.gemini_api_key:
             raise ConfigurationError(
                 "GEMINI_API_KEY is required when LLM_PROVIDER is 'gemini'."
+            )
+        if self.llm_provider == "groq" and not self.groq_api_key:
+            raise ConfigurationError(
+                "GROQ_API_KEY is required when LLM_PROVIDER is 'groq'."
             )
 
     def public_config(self) -> dict[str, object]:

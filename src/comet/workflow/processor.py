@@ -5,13 +5,7 @@ from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime, timezone
 from pathlib import Path
 
-from comet.exceptions import (
-    EmailGenerationError,
-    IngestionError,
-    LLMProviderError,
-    StructuredOutputValidationError,
-    SummaryGenerationError,
-)
+from comet.exceptions import IngestionError, LLMError
 from comet.ids import build_document_id
 from comet.ingestion.discovery import SUPPORTED_EXTENSIONS
 from comet.ingestion.loaders import load_document
@@ -118,14 +112,14 @@ class DocumentProcessor:
                 email_md,
                 summary_md,
             )
-        except EmailGenerationError as exc:
-            return self._finish(source, doc_id, started, error_code=exc.error_code)
-        except SummaryGenerationError as exc:
-            return self._finish(source, doc_id, started, error_code=exc.error_code)
-        except StructuredOutputValidationError as exc:
-            return self._finish(source, doc_id, started, error_code=exc.error_code)
-        except LLMProviderError as exc:
-            return self._finish(source, doc_id, started, error_code=exc.error_code)
+        except LLMError as exc:
+            return self._finish(
+                source,
+                doc_id,
+                started,
+                error_code=exc.error_code,
+                error_message=str(exc),
+            )
         except Exception as exc:
             return self._finish(
                 source,

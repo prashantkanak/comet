@@ -25,3 +25,9 @@ def test_gemini_requires_key():
     settings = Settings(llm_provider="gemini", gemini_api_key=None)
     with pytest.raises(ConfigurationError, match="GEMINI_API_KEY"):
         settings.validate_provider_credentials()
+
+
+def test_groq_requires_key():
+    settings = Settings(llm_provider="groq", groq_api_key=None)
+    with pytest.raises(ConfigurationError, match="GROQ_API_KEY"):
+        settings.validate_provider_credentials()

@@ -39,7 +39,7 @@ def _inject_theme() -> None:
             --stamp: #172554;
           }
           html, .stApp { background: var(--paper); color: var(--ink); -webkit-font-smoothing: antialiased; }
-          .block-container { max-width: 1180px; padding-top: 1.25rem; padding-bottom: 4rem; }
+          .block-container { max-width: 100% !important; padding-top: 1.25rem; padding-bottom: 4rem; padding-left: 1.5rem; padding-right: 1.5rem; }
           .stDeployButton { display: none !important; }
           footer { visibility: hidden; }
           [data-testid="stMetric"] { font-variant-numeric: tabular-nums; }
@@ -166,6 +166,13 @@ def _display_results(summary: BatchRunSummary) -> None:
     processed = summary.counts["discovered"]
     st.markdown("### Case review")
     st.metric("Documents processed", processed)
+    if summary.token_usage:
+        usage = summary.token_usage
+        call_col, prompt_col, completion_col, total_col = st.columns(4)
+        call_col.metric("LLM calls", usage["calls"])
+        prompt_col.metric("Prompt tokens", usage["prompt_tokens"])
+        completion_col.metric("Completion tokens", usage["completion_tokens"])
+        total_col.metric("Total tokens", usage["total_tokens"])
 
     st.markdown("#### Consolidated report")
     st.dataframe(

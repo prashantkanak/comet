@@ -62,6 +62,11 @@ def test_openai_without_key_fails():
     assert main(["--provider", "openai"]) == 1
 
 
+def test_groq_without_key_fails(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "")
+    assert main(["--provider", "groq"]) == 1
+
+
 def test_cli_ingestion_continues_on_mixed_batch(tmp_path, capsys):
     (tmp_path / "ok.txt").write_text("Late delivery of order 12.")
     (tmp_path / "empty.txt").write_text(" ")

@@ -63,7 +63,7 @@ class GeminiLLMProvider:
         }
         if json_object:
             config["response_mime_type"] = "application/json"
-            config["response_schema"] = ComplaintCase
+            config["response_schema"] = ComplaintCase.model_json_schema()
         try:
             response = self._client.models.generate_content(
                 model=self.model_name,
@@ -96,12 +96,38 @@ def _parse_case_json(content: str) -> ComplaintCase:
         ) from exc
 
 
+def _status_code(exc: Exception) -> int | None:
+    raw = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+    try:
+        return int(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _gemini_user_message(status_code: int | None) -> str:
+    if status_code == 403:
+        return (
+            "Gemini returned 403 Forbidden. The API key was rejected or this "
+            "model is not enabled for the key."
+        )
+    if status_code == 404:
+        return "Gemini model was not found. Check MODEL_NAME."
+    if status_code == 429:
+        return "Gemini rate limit reached. Retry later."
+    if status_code:
+        return f"Gemini provider request failed ({status_code})"
+    return "Gemini provider request failed"
+
+
 def _reraise_provider_error(exc: Exception) -> None:
-    status_code = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+    status_code = _status_code(exc)
     transient = status_code in {408, 409, 429, 500, 502, 503, 504}
     logger.warning(
-        "gemini_provider_error type=%s transient=%s",
+        "gemini_provider_error type=%s status=%s transient=%s",
         type(exc).__name__,
+        status_code if status_code is not None else "",
         transient,
     )
-    raise LLMProviderError("Gemini provider request failed", transient=transient) from exc
+    raise LLMProviderError(
+        _gemini_user_message(status_code), transient=transient
+    ) from exc

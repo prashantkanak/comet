@@ -1,6 +1,7 @@
 """Shared upload + batch helpers used by Streamlit and the Vercel FastAPI app."""
 
 import csv
+import logging
 import os
 from pathlib import Path
 from uuid import uuid4
@@ -13,6 +14,7 @@ from comet.logging_config import setup_logging
 from comet.workflow import BatchProcessor
 from comet.workflow.batch import BatchRunSummary
 
+logger = logging.getLogger(__name__)
 UPLOAD_TYPES = sorted(ext.lstrip(".") for ext in SUPPORTED_EXTENSIONS)
 PRODUCT_NAME = "COMET"
 PRODUCT_FULL_FORM = (
@@ -113,6 +115,18 @@ def run_batch(settings: Settings) -> BatchRunSummary:
     log_dir = Path("/tmp/comet-logs") if os.environ.get("VERCEL") else Path("logs")
     setup_logging(settings.log_level, log_dir=log_dir)
     provider = create_provider(settings)
+    model_name = settings.model_name or getattr(provider, "model_name", None)
+    credential_set = {
+        "openai": bool(settings.openai_api_key),
+        "gemini": bool(settings.gemini_api_key),
+        "groq": bool(settings.groq_api_key),
+    }.get(settings.llm_provider, False)
+    logger.info(
+        "request_llm provider=%s model=%s credential_set=%s",
+        settings.llm_provider,
+        model_name or "",
+        credential_set,
+    )
     return BatchProcessor(
         settings.input_dir,
         settings.output_dir,
@@ -120,7 +134,7 @@ def run_batch(settings: Settings) -> BatchRunSummary:
         overwrite=settings.overwrite,
         max_attempts=settings.max_llm_attempts,
         llm_provider=settings.llm_provider,
-        model_name=settings.model_name or getattr(provider, "model_name", None),
+        model_name=model_name,
     ).run()
 
 

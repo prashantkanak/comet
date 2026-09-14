@@ -60,7 +60,7 @@ def test_gemini_extracts_pydantic_case_with_json_schema():
         "system_instruction": EXTRACTION_SYSTEM,
         "temperature": 0,
         "response_mime_type": "application/json",
-        "response_schema": ComplaintCase,
+        "response_schema": ComplaintCase.model_json_schema(),
     }
     assert "<<<DOCUMENT>>>" in str(kwargs["contents"])
 
@@ -92,3 +92,16 @@ def test_gemini_transport_error_is_provider_error():
         provider.extract_case("Charged twice.")
     assert exc.value.error_code == "LLM_PROVIDER_ERROR"
     assert "network down" not in str(exc.value)
+
+
+def test_gemini_forbidden_explains_key_or_model_access():
+    class _Forbidden(Exception):
+        status_code = 403
+
+    provider = GeminiLLMProvider(
+        api_key="fake", client=_StubClient([_Forbidden("blocked")])
+    )
+    with pytest.raises(LLMProviderError) as exc:
+        provider.extract_case("Charged twice.")
+    assert "403 Forbidden" in str(exc.value)
+    assert "blocked" not in str(exc.value)
