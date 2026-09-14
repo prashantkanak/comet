@@ -10,8 +10,7 @@ from comet.config import Settings
 from comet.exceptions import ConfigurationError
 from comet.llm import create_provider
 from comet.logging_config import setup_logging
-from comet.models import ProcessingStatus
-from comet.workflow import run_offline_pipeline
+from comet.workflow import BatchProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -112,40 +111,38 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        results, report_path = run_offline_pipeline(
+        summary = BatchProcessor(
             settings.input_dir,
             settings.output_dir,
             provider,
             overwrite=settings.overwrite,
-        )
+            max_attempts=settings.max_llm_attempts,
+            llm_provider=settings.llm_provider,
+            model_name=settings.model_name or getattr(provider, "model_name", None),
+        ).run()
     except OSError as exc:
         logger.error("Output directory is not writable: %s", exc)
         return 1
 
-    successful = failed = skipped = 0
-    for item in results:
-        if item.status == ProcessingStatus.SUCCESS:
-            successful += 1
-            print(f"success  {item.document_id}  {item.source_file}")
-        elif item.status == ProcessingStatus.SKIPPED:
-            skipped += 1
-            print(f"skipped  {item.document_id}  {item.source_file}  {item.error_code}")
-        else:
-            failed += 1
-            print(f"failed   {item.document_id}  {item.source_file}  {item.error_code}")
+    counts = summary.counts
+    for item in summary.results:
+        status = item.status.value
+        extra = f"  {item.error_code}" if item.error_code else ""
+        print(f"{status:<9} {item.document_id}  {item.source_file}{extra}")
 
     print(
-        f"discovered={len(results)} successful={successful} "
-        f"failed={failed} skipped={skipped}"
+        f"discovered={counts['discovered']} successful={counts['successful']} "
+        f"failed={counts['failed']} skipped={counts['skipped']}"
     )
-    print(f"report={report_path}")
+    print(f"report={summary.report_path}")
+    print(f"manifest={summary.manifest_path}")
     logger.info(
-        "Run complete discovered=%s successful=%s failed=%s skipped=%s report=%s",
-        len(results),
-        successful,
-        failed,
-        skipped,
-        report_path,
+        "run_summary discovered=%s successful=%s failed=%s skipped=%s report=%s",
+        counts["discovered"],
+        counts["successful"],
+        counts["failed"],
+        counts["skipped"],
+        summary.report_path,
     )
     return 0
 

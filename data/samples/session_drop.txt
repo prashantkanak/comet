@@ -1,0 +1,6 @@
+Other — Fictional Sample
+
+From: Chris Patel
+
+The app keeps logging me out on the billing page. Not sure if this is an
+account access issue or something else. Please look into it.

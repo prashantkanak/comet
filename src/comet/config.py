@@ -45,3 +45,15 @@ class Settings(BaseSettings):
             raise ConfigurationError(
                 "GEMINI_API_KEY is required when LLM_PROVIDER is 'gemini'."
             )
+
+    def public_config(self) -> dict[str, object]:
+        """Configuration safe to persist: no API keys or secrets."""
+        return {
+            "llm_provider": self.llm_provider,
+            "model_name": self.model_name,
+            "max_llm_attempts": self.max_llm_attempts,
+            "input_dir": str(self.input_dir),
+            "output_dir": str(self.output_dir),
+            "log_level": self.log_level,
+            "overwrite": self.overwrite,
+        }

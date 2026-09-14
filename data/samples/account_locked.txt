@@ -1,0 +1,7 @@
+Account Access Complaint — Fictional Sample
+
+Customer: Morgan Lee
+Email: morgan.lee@example.com
+
+I cannot log in. My account appears locked after several password attempts.
+Please restore access. I did not receive a reset email.

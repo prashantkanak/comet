@@ -6,7 +6,9 @@ from comet.models import ComplaintCase
 
 
 class LLMProvider(Protocol):
-    def extract_case(self, document_text: str) -> ComplaintCase: ...
+    def extract_case(
+        self, document_text: str, *, repair: bool = False
+    ) -> ComplaintCase: ...
 
     def generate_customer_email(self, case: ComplaintCase) -> str: ...
 

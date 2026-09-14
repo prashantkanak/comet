@@ -30,3 +30,38 @@ class DocumentReadError(IngestionError):
 
 class EmptyDocumentError(IngestionError):
     error_code = "EMPTY_DOCUMENT"
+
+
+class LLMError(CometError):
+    """Raised when an LLM call or its structured output fails."""
+
+    error_code = "LLM_ERROR"
+    transient = False
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_code: str | None = None,
+        transient: bool = False,
+    ) -> None:
+        super().__init__(message)
+        if error_code is not None:
+            self.error_code = error_code
+        self.transient = transient
+
+
+class StructuredOutputValidationError(LLMError):
+    error_code = "STRUCTURED_OUTPUT_VALIDATION_ERROR"
+
+
+class LLMProviderError(LLMError):
+    error_code = "LLM_PROVIDER_ERROR"
+
+
+class EmailGenerationError(LLMError):
+    error_code = "EMAIL_GENERATION_ERROR"
+
+
+class SummaryGenerationError(LLMError):
+    error_code = "SUMMARY_GENERATION_ERROR"

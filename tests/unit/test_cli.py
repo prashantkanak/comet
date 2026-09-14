@@ -76,4 +76,5 @@ def test_cli_ingestion_continues_on_mixed_batch(tmp_path, capsys):
     assert "UNSUPPORTED_FILE_TYPE" in stdout
     assert "Late delivery" not in stdout
     assert (out / "final_report.csv").is_file()
+    assert (out / "run_manifest.json").is_file()
     assert list((out / "structured_data").glob("*.json"))

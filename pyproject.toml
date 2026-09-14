@@ -15,6 +15,7 @@ dependencies = [
     "python-dotenv>=1.0",
     "PyMuPDF>=1.24",
     "python-docx>=1.1",
+    "openai>=1.40",
 ]
 
 [project.optional-dependencies]
@@ -32,3 +33,6 @@ where = ["src"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-q"
+markers = [
+    "live: opt-in tests that call a real LLM (COMET_LIVE_LLM=1)",
+]
