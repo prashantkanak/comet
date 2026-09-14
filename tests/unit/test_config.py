@@ -6,7 +6,11 @@ from comet.config import Settings
 from comet.exceptions import ConfigurationError
 
 
-def test_mock_provider_needs_no_key():
+def test_empty_llm_provider_env_defaults_to_mock(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "")
+    settings = Settings()
+    assert settings.llm_provider == "mock"
+    settings.validate_provider_credentials()
     settings = Settings(llm_provider="mock")
     settings.validate_provider_credentials()
 

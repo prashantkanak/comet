@@ -30,6 +30,22 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     overwrite: bool = Field(default=False)
 
+    @field_validator("llm_provider", mode="before")
+    @classmethod
+    def empty_provider_defaults_to_mock(cls, value: object) -> object:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return "mock"
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
+
+    @field_validator("model_name", "openai_api_key", "gemini_api_key", mode="before")
+    @classmethod
+    def empty_optional_str_is_none(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     @field_validator("log_level")
     @classmethod
     def normalize_log_level(cls, value: str) -> str:
