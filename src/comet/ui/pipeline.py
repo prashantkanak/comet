@@ -14,6 +14,21 @@ from comet.workflow import BatchProcessor
 from comet.workflow.batch import BatchRunSummary
 
 UPLOAD_TYPES = sorted(ext.lstrip(".") for ext in SUPPORTED_EXTENSIONS)
+PRODUCT_NAME = "COMET"
+PRODUCT_FULL_FORM = (
+    "Complaint Orchestration & Management Engine for Triage"
+)
+_SAMPLES = Path(__file__).resolve().parents[3] / "data" / "samples"
+SAMPLE_DOCUMENTS = (
+    ("TXT sample", "Billing complaint", _SAMPLES / "billing_complaint.txt", "text/plain"),
+    ("PDF sample", "Product-quality incident", _SAMPLES / "product_quality.pdf", "application/pdf"),
+    (
+        "DOCX sample",
+        "Service-delay complaint",
+        _SAMPLES / "service_issue.docx",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ),
+)
 
 
 def default_tmp_root() -> Path:
@@ -95,7 +110,8 @@ def run_batch(settings: Settings) -> BatchRunSummary:
     settings.validate_provider_credentials()
     if not settings.input_dir.is_dir():
         raise ConfigurationError(f"Input directory does not exist: {settings.input_dir}")
-    setup_logging(settings.log_level)
+    log_dir = Path("/tmp/comet-logs") if os.environ.get("VERCEL") else Path("logs")
+    setup_logging(settings.log_level, log_dir=log_dir)
     provider = create_provider(settings)
     return BatchProcessor(
         settings.input_dir,

@@ -10,6 +10,9 @@ import streamlit as st
 from comet import __version__
 from comet.exceptions import ConfigurationError
 from comet.ui.pipeline import (
+    PRODUCT_FULL_FORM,
+    PRODUCT_NAME,
+    SAMPLE_DOCUMENTS,
     UPLOAD_TYPES,
     build_settings,
     default_output_dir,
@@ -18,24 +21,9 @@ from comet.ui.pipeline import (
     run_batch,
     stage_uploads,
 )
-from comet.workflow.batch import BatchRunSummary
 
-PRODUCT_NAME = "COMET"
-PRODUCT_FULL_FORM = (
-    "Complaint Orchestration & Management Engine for Triage"
-)
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-_SAMPLES = _REPO_ROOT / "data" / "samples"
-SAMPLE_DOCUMENTS = (
-    ("TXT sample", "Billing complaint", _SAMPLES / "billing_complaint.txt", "text/plain"),
-    ("PDF sample", "Product-quality incident", _SAMPLES / "product_quality.pdf", "application/pdf"),
-    (
-        "DOCX sample",
-        "Service-delay complaint",
-        _SAMPLES / "service_issue.docx",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ),
-)
+
+from comet.workflow.batch import BatchRunSummary
 
 
 def _inject_theme() -> None:
