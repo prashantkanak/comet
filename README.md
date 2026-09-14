@@ -75,7 +75,7 @@ python -m comet.cli --input data/samples --output output --provider mock --overw
 |---|---|---|
 | `--input` | `data` | Directory to scan (recursive) |
 | `--output` | `output` | Artifact root |
-| `--provider` | `mock` | `mock` or `openai` (`gemini` not implemented) |
+| `--provider` | `mock` | `mock`, `openai`, or `gemini` |
 | `--max-attempts` | `2` | Extraction attempts (one repair/retry) |
 | `--log-level` | `INFO` | Console/file verbosity |
 | `--overwrite` | off | Replace existing artifacts for the same document id |
@@ -135,6 +135,16 @@ export OPENAI_API_KEY=...
 COMET_LIVE_LLM=1 pytest tests/integration/test_live_openai.py
 ```
 
+## Gemini (optional)
+
+Set `GEMINI_API_KEY` in `.env`, optionally set `MODEL_NAME`, then run:
+
+```bash
+python -m comet.cli --input data/samples --output output --provider gemini --overwrite
+```
+
+Gemini structured extraction uses the official Google GenAI SDK's JSON response schema, followed by the same Pydantic validation and bounded retry path as OpenAI.
+
 ## Layout
 
 ```text
@@ -156,3 +166,25 @@ docs/technical-design.md
 ## Tests
 
 Default `pytest` uses the mock provider and temp directories only. It does not need an API key.
+
+## Optional dashboard (Phase 9)
+
+The Streamlit dashboard is a thin UI over the same `BatchProcessor` used by the CLI; it does not duplicate ingestion or LLM logic. Upload one `.txt`, `.pdf`, or `.docx` file; the dashboard validates the type, stages it under `tmp/`, processes only that file, then shows the extracted case, draft email, internal summary, and CSV download.
+
+```bash
+streamlit run src/comet/ui/app.py
+```
+
+Use mock mode for a local demonstration. For OpenAI or Gemini, keep the relevant API key in `.env`; the dashboard deliberately has no API-key field.
+
+## Vercel
+
+[Vercel’s Python runtime](https://vercel.com/docs/functions/runtimes/python) hosts **FastAPI/WSGI**, not Streamlit. This repo’s deployable app is `app.py` (`comet.web:app`): same upload → `tmp` → `BatchProcessor` flow, with HTML results. Streamlit remains for local use.
+
+```bash
+pip install -e ".[dev]"
+# local check
+python -c "from app import app; print(app.title)"
+```
+
+Redeploy after pushing `app.py`, `vercel.json`, and FastAPI deps. Set `OPENAI_API_KEY` / `GEMINI_API_KEY` in the Vercel project if you use those providers. Mock mode needs no keys. Function timeout is 60s (`vercel.json`).

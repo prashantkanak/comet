@@ -4,6 +4,7 @@
 # Generated artifacts
 output/
 logs/
+tmp/
 
 # Local input (sample fixtures under data/samples/ are tracked)
 data/*

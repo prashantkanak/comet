@@ -6,7 +6,7 @@ from comet.exceptions import EmailGenerationError
 from comet.llm import MockLLMProvider, OpenAILLMProvider
 from comet.llm.prompts import EMAIL_SYSTEM, email_user_message
 from comet.models import ComplaintCase
-from comet.services.email_service import generate_customer_email
+from comet.services.email_service import generate_customer_email, is_valid_email_draft
 from comet.workflow import run_offline_pipeline
 
 
@@ -68,6 +68,36 @@ def test_email_service_rejects_empty_draft():
     with pytest.raises(EmailGenerationError) as exc:
         generate_customer_email(EmptyEmail(), _case())
     assert exc.value.error_code == "EMAIL_GENERATION_ERROR"
+
+
+@pytest.mark.parametrize(
+    "draft",
+    [
+        "A plain response without a subject",
+        "# Subject: \n\nBody without a subject",
+        "# Subject: Valid subject\n\n   ",
+    ],
+)
+def test_email_service_rejects_malformed_draft(draft):
+    class MalformedEmail:
+        def extract_case(self, document_text, *, repair=False):
+            raise AssertionError("email service must not extract")
+
+        def generate_customer_email(self, case):
+            del case
+            return draft
+
+        def generate_case_summary(self, case):
+            del case
+            return "summary"
+
+    assert not is_valid_email_draft(draft)
+    with pytest.raises(EmailGenerationError):
+        generate_customer_email(MalformedEmail(), _case())
+
+
+def test_email_draft_validator_accepts_subject_and_body():
+    assert is_valid_email_draft("# Subject: Case update\n\nDear Customer,\n\nThank you.")
 
 
 def test_openai_email_sends_case_json_not_source_document():

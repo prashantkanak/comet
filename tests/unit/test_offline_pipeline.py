@@ -3,11 +3,14 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from comet.ids import build_document_id
 from comet.llm import MockLLMProvider
 from comet.models import ComplaintCategory, ProcessingStatus
 from comet.reporting import CSV_COLUMNS
 from comet.services.artifact_service import write_text_atomic
+from comet.services import artifact_service
 from comet.workflow import run_offline_pipeline
 
 
@@ -46,6 +49,40 @@ def test_atomic_write_replaces_target(tmp_path):
     write_text_atomic(path, "two")
     assert path.read_text() == "two"
     assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_artifact_publish_restores_prior_set_when_one_commit_fails(tmp_path, monkeypatch):
+    output_dir = tmp_path / "out"
+    document_id = "case_123"
+    case = MockLLMProvider().extract_case("I was charged twice on my invoice.")
+    paths = artifact_service.artifact_paths(output_dir, document_id)
+    for path in paths.values():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"old:{path.name}")
+
+    original_replace = Path.replace
+
+    def fail_summary_publish(source: Path, target: Path):
+        if source.parent.name == "case_summaries" and source.name.endswith(".tmp"):
+            raise OSError("simulated summary publish failure")
+        return original_replace(source, target)
+
+    monkeypatch.setattr(Path, "replace", fail_summary_publish)
+    with pytest.raises(OSError, match="simulated"):
+        artifact_service.write_success_artifacts(
+            output_dir,
+            document_id,
+            "case.txt",
+            case,
+            "# Subject: New draft\n\nBody\n",
+            "# Case summary\n\n## Overview\nNew\n",
+        )
+
+    assert {path.read_text() for path in paths.values()} == {
+        f"old:{path.name}" for path in paths.values()
+    }
+    assert not list(output_dir.rglob(".*.tmp"))
+    assert not list(output_dir.rglob(".*.bak"))
 
 
 def test_offline_pipeline_writes_json_markdown_csv(tmp_path):

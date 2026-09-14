@@ -7,6 +7,7 @@ import pytest
 from comet.exceptions import ConfigurationError, LLMProviderError, StructuredOutputValidationError
 from comet.config import Settings
 from comet.llm.factory import create_provider
+from comet.llm.gemini_provider import GeminiLLMProvider
 from comet.llm.mock_provider import MockLLMProvider
 from comet.llm.openai_provider import OpenAILLMProvider
 from comet.llm.prompts import EXTRACTION_REPAIR
@@ -73,10 +74,11 @@ def test_factory_openai_requires_implemented_adapter():
     assert provider.model_name == "gpt-4o-mini"
 
 
-def test_factory_gemini_not_implemented():
+def test_factory_returns_gemini_provider():
     settings = Settings(llm_provider="gemini", gemini_api_key="fake")
-    with pytest.raises(ConfigurationError, match="not implemented"):
-        create_provider(settings)
+    provider = create_provider(settings)
+    assert isinstance(provider, GeminiLLMProvider)
+    assert provider.model_name == "gemini-2.5-flash"
 
 
 def test_openai_parses_valid_json():

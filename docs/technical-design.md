@@ -412,9 +412,9 @@ Add failure-path tests, README with architecture/setup/sample output, clean lint
 
 ### Phase 9 — Optional Streamlit UI
 
-Only after the CLI is stable, add a thin UI that invokes the same workflow API. It must not duplicate business logic.
+Implemented after CLI stabilization as `src/comet/ui/app.py`. It is a thin UI that invokes the same workflow API and does not duplicate business logic.
 
-**Done when:** the UI selects input/output directories, starts a run, shows aggregate results, and links to the CSV/artifacts.
+**Done when:** the UI accepts one supported upload into `tmp/`, starts a run on that file, shows the extracted case plus draft artifacts, and offers the CSV download.
 
 ## 12. Dependency plan
 
