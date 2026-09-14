@@ -1,29 +1,27 @@
-"""Production Streamlit dashboard for complaint intake and case review."""
+"""Streamlit Cloud UI. Processing runs on the Vercel FastAPI backend."""
 
 from __future__ import annotations
 
+import os
 from html import escape
-from pathlib import Path
 
+import httpx
 import streamlit as st
 
-from comet import __version__
-from comet.exceptions import ConfigurationError
-from comet.ui.pipeline import (
-    PRODUCT_FULL_FORM,
-    PRODUCT_NAME,
-    SAMPLE_DOCUMENTS,
-    UPLOAD_TYPES,
-    build_settings,
-    default_output_dir,
-    display_report_rows,
-    read_text,
-    run_batch,
-    stage_uploads,
-)
+PRODUCT_NAME = "COMET"
+PRODUCT_FULL_FORM = "Complaint Orchestration & Management Engine for Triage"
+UPLOAD_TYPES = ["txt", "pdf", "docx"]
+PROCESS_TIMEOUT = 60.0
 
 
-from comet.workflow.batch import BatchRunSummary
+def _api_base() -> str:
+    url = os.environ.get("COMET_API_URL", "").strip()
+    if not url:
+        try:
+            url = str(st.secrets.get("COMET_API_URL", "")).strip()
+        except Exception:
+            url = ""
+    return url.rstrip("/")
 
 
 def _inject_theme() -> None:
@@ -107,67 +105,93 @@ def _inject_theme() -> None:
     )
 
 
-def _render_sample_downloads() -> None:
+def _error_detail(response: httpx.Response) -> str:
+    try:
+        payload = response.json()
+    except ValueError:
+        return response.text or f"HTTP {response.status_code}"
+    if isinstance(payload, dict) and payload.get("detail"):
+        return str(payload["detail"])
+    return response.text or f"HTTP {response.status_code}"
+
+
+def _list_samples(base: str) -> list[dict]:
+    try:
+        response = httpx.get(f"{base}/api/samples", timeout=15.0)
+        response.raise_for_status()
+        return list(response.json().get("samples") or [])
+    except Exception:
+        return []
+
+
+def _render_sample_downloads(base: str) -> None:
+    samples = _list_samples(base)
+    if not samples:
+        return
     with st.popover("Sample documents"):
         st.caption("Download a fictional .txt, .pdf, or .docx complaint.")
-        for _label, title, path, mime in SAMPLE_DOCUMENTS:
-            if not path.is_file():
+        for sample in samples:
+            filename = sample["filename"]
+            try:
+                response = httpx.get(f"{base}/samples/{filename}", timeout=15.0)
+                response.raise_for_status()
+                data = response.content
+            except Exception:
                 continue
             st.download_button(
-                f".{path.suffix.lstrip('.')}",
-                data=path.read_bytes(),
-                file_name=path.name,
-                mime=mime,
-                key=f"sample-{path.suffix}",
-                help=title,
+                f".{filename.rsplit('.', 1)[-1]}",
+                data=data,
+                file_name=filename,
+                mime=sample.get("mime") or "application/octet-stream",
+                key=f"sample-{filename}",
+                help=sample.get("title") or filename,
                 use_container_width=True,
             )
 
 
-def _tab_labels(results) -> list[str]:
+def _tab_labels(documents: list[dict]) -> list[str]:
     labels: list[str] = []
     seen: dict[str, int] = {}
-    for result in results:
-        name = Path(result.source_file).name
+    for document in documents:
+        name = document.get("source_file") or document.get("document_id") or "document"
         count = seen.get(name, 0) + 1
         seen[name] = count
         labels.append(name if count == 1 else f"{name} ({count})")
     return labels
 
 
-def _display_case_fields(result) -> None:
-    case = result.case
-    if case is None:
-        return
+def _display_case_fields(case: dict) -> None:
     columns = st.columns(4)
-    columns[0].metric("Category", case.complaint_category.value.replace("_", " ").title())
-    columns[1].metric("Status", case.overall_case_status.value.replace("_", " ").title())
-    columns[2].metric("Complaint", "Yes" if case.is_complaint else "No")
-    columns[3].metric("Escalation", "Yes" if case.escalation_required else "No")
+    category = str(case.get("complaint_category") or "unknown").replace("_", " ").title()
+    status = str(case.get("overall_case_status") or "unknown").replace("_", " ").title()
+    columns[0].metric("Category", category)
+    columns[1].metric("Status", status)
+    columns[2].metric("Complaint", "Yes" if case.get("is_complaint") else "No")
+    columns[3].metric("Escalation", "Yes" if case.get("escalation_required") else "No")
 
 
-def _display_file_tab(result) -> None:
-    if result.error_code:
-        st.error(f"{result.error_code}: {result.error_message or result.error_code}")
+def _display_file_tab(document: dict) -> None:
+    if document.get("error_code"):
+        st.error(
+            f"{document['error_code']}: {document.get('error_message') or document['error_code']}"
+        )
         return
-    _display_case_fields(result)
-    email_md = read_text(result.customer_email_path)
-    summary_md = read_text(result.case_summary_path)
-    structured = read_text(result.structured_data_path)
+    if document.get("case"):
+        _display_case_fields(document["case"])
     st.markdown("<p class='artifact-label'>Customer email</p>", unsafe_allow_html=True)
-    st.markdown(email_md or "_No email artifact._")
+    st.markdown(document.get("customer_email") or "_No email artifact._")
     st.markdown("<p class='artifact-label'>Case summary</p>", unsafe_allow_html=True)
-    st.markdown(summary_md or "_No summary artifact._")
+    st.markdown(document.get("case_summary") or "_No summary artifact._")
     st.markdown("<p class='artifact-label'>Structured data</p>", unsafe_allow_html=True)
-    st.code(structured or "{}", language="json")
+    st.code(document.get("structured_data") or "{}", language="json")
 
 
-def _display_results(summary: BatchRunSummary) -> None:
-    processed = summary.counts["discovered"]
+def _display_results(payload: dict) -> None:
+    processed = (payload.get("counts") or {}).get("discovered", 0)
     st.markdown("### Case review")
     st.metric("Documents processed", processed)
-    if summary.token_usage:
-        usage = summary.token_usage
+    usage = payload.get("token_usage")
+    if usage:
         call_col, prompt_col, completion_col, total_col = st.columns(4)
         call_col.metric("LLM calls", usage["calls"])
         prompt_col.metric("Prompt tokens", usage["prompt_tokens"])
@@ -175,25 +199,40 @@ def _display_results(summary: BatchRunSummary) -> None:
         total_col.metric("Total tokens", usage["total_tokens"])
 
     st.markdown("#### Consolidated report")
-    st.dataframe(
-        display_report_rows(summary.report_path),
-        use_container_width=True,
-        hide_index=True,
-    )
+    rows = payload.get("report_rows") or []
+    if rows:
+        st.dataframe(rows, use_container_width=True, hide_index=True)
+    csv_text = payload.get("report_csv") or ""
     st.download_button(
         "Download report (CSV)",
-        data=summary.report_path.read_bytes(),
+        data=csv_text.encode("utf-8"),
         file_name="final_report.csv",
         mime="text/csv",
     )
 
-    if not summary.results:
+    documents = payload.get("documents") or []
+    if not documents:
         return
     st.markdown("#### Documents")
-    tabs = st.tabs(_tab_labels(summary.results))
-    for tab, result in zip(tabs, summary.results, strict=True):
+    tabs = st.tabs(_tab_labels(documents))
+    for tab, document in zip(tabs, documents, strict=True):
         with tab:
-            _display_file_tab(result)
+            _display_file_tab(document)
+
+
+def _process(base: str, files) -> dict:
+    uploads = [
+        ("files", (item.name, item.getvalue(), item.type or "application/octet-stream"))
+        for item in files
+    ]
+    response = httpx.post(
+        f"{base}/api/process",
+        files=uploads,
+        timeout=PROCESS_TIMEOUT,
+    )
+    if response.status_code >= 400:
+        raise RuntimeError(_error_detail(response))
+    return response.json()
 
 
 def main() -> None:
@@ -206,17 +245,25 @@ def main() -> None:
     _inject_theme()
     st.markdown(
         f"""<header class="app-header">
-              <h1>{PRODUCT_NAME}</h1>
-              <p class="expand">{PRODUCT_FULL_FORM}</p>
+              <h1>{escape(PRODUCT_NAME)}</h1>
+              <p class="expand">{escape(PRODUCT_FULL_FORM)}</p>
             </header>""",
         unsafe_allow_html=True,
     )
+    base = _api_base()
+    if not base:
+        st.error(
+            "Set COMET_API_URL to the Vercel backend "
+            "(environment variable or Streamlit secrets)."
+        )
+        return
+
     with st.container(border=True):
         title_col, sample_col = st.columns([4.2, 1.2], vertical_alignment="bottom")
         with title_col:
             st.markdown("## Upload complaint")
         with sample_col:
-            _render_sample_downloads()
+            _render_sample_downloads(base)
         st.caption("Add one or more .txt, .pdf, or .docx files. Drafts are never sent.")
         uploaded = st.file_uploader(
             "Complaint documents",
@@ -232,26 +279,19 @@ def main() -> None:
                 st.error("Choose at least one .txt, .pdf, or .docx file.")
             else:
                 try:
-                    payloads = [(item.name, item.getvalue()) for item in files]
-                    input_dir = stage_uploads(payloads)
-                    settings = build_settings(
-                        str(input_dir), str(default_output_dir()), True
-                    )
-                    with st.spinner(f"Processing {len(payloads)} document(s)…"):
-                        st.session_state["batch_summary"] = run_batch(settings)
-                    st.success(f"Finished processing {len(payloads)} document(s).")
-                except ConfigurationError as exc:
+                    with st.spinner(f"Processing {len(files)} document(s)…"):
+                        st.session_state["batch_payload"] = _process(base, files)
+                    st.success(f"Finished processing {len(files)} document(s).")
+                except httpx.RequestError as exc:
+                    st.error(f"Could not reach the backend at {base}: {exc}")
+                except Exception as exc:
                     st.error(str(exc))
-                except OSError as exc:
-                    st.error(f"The run could not access its files: {exc}")
-                except Exception:
-                    st.exception("The workflow stopped unexpectedly. Check logs/application.log.")
 
-    summary = st.session_state.get("batch_summary")
-    if isinstance(summary, BatchRunSummary):
-        _display_results(summary)
+    payload = st.session_state.get("batch_payload")
+    if isinstance(payload, dict) and "documents" in payload:
+        _display_results(payload)
 
-    st.caption(f"{PRODUCT_NAME} v{__version__}")
+    st.caption(f"{PRODUCT_NAME}  ·  backend {base}")
 
 
 if __name__ == "__main__":

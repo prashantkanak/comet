@@ -82,6 +82,10 @@ The bracketed tasks are independent and run using `ThreadPoolExecutor(max_worker
 
 ```text
 comet-ai/
+├── app.py                        # Vercel FastAPI entry
+├── frontend/                     # Streamlit Community Cloud UI
+│   ├── streamlit_app.py
+│   └── requirements.txt
 ├── data/                         # local input; ignored except sample fixtures
 ├── output/                       # generated, ignored by Git
 ├── logs/                         # generated, ignored by Git
@@ -410,11 +414,11 @@ Add failure-path tests, README with architecture/setup/sample output, clean lint
 
 **Done when:** a new evaluator can clone the project, run mock mode locally, understand all design decisions, and inspect generated sample output.
 
-### Phase 9 — Optional Streamlit UI
+### Phase 9 — Streamlit UI + Vercel API
 
-Implemented after CLI stabilization as `src/comet/ui/app.py`. It is a thin UI that invokes the same workflow API and does not duplicate business logic.
+The dashboard is `frontend/streamlit_app.py` and talks to `POST /api/process` on FastAPI (`comet.web`). The API stages uploads, runs `BatchProcessor`, and returns artifact bodies as JSON. Streamlit does not import the workflow package.
 
-**Done when:** the UI accepts one supported upload into `tmp/`, starts a run on that file, shows the extracted case plus draft artifacts, and offers the CSV download.
+**Done when:** the UI uploads supported files to the API and shows the extracted case, draft artifacts, and CSV download.
 
 ## 12. Dependency plan
 

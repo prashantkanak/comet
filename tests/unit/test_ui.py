@@ -1,4 +1,4 @@
-"""Tests for the thin Streamlit presentation layer without starting a server."""
+"""Tests for API upload staging and batch helpers."""
 
 from pathlib import Path
 
@@ -6,14 +6,15 @@ import pytest
 
 from comet.exceptions import ConfigurationError
 from comet.llm import MockLLMProvider
-from comet.ui.app import SAMPLE_DOCUMENTS
 from comet.ui.pipeline import (
+    SAMPLE_DOCUMENTS,
     build_settings,
     display_report_rows,
     report_rows,
     run_batch,
     stage_upload,
     stage_uploads,
+    summary_to_api,
     validate_upload_filename,
 )
 
@@ -96,3 +97,8 @@ def test_display_report_rows_uses_basename_for_source_file(tmp_path, monkeypatch
     assert summary.results[0].case is not None
     assert Path(summary.results[0].customer_email_path).is_file()
     assert Path(summary.results[0].case_summary_path).is_file()
+    payload = summary_to_api(summary)
+    assert payload["documents"][0]["source_file"] == "case.txt"
+    assert payload["documents"][0]["case"]["is_complaint"] is True
+    assert "Dear" in payload["documents"][0]["customer_email"]
+    assert "output/" not in payload["documents"][0]["customer_email"]

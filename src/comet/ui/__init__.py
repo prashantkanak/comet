@@ -1,1 +1,1 @@
-"""Optional presentation layer (Streamlit locally, FastAPI on Vercel)."""
+"""Backend helpers for the FastAPI API. Streamlit lives in frontend/."""

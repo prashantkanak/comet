@@ -158,14 +158,18 @@ Groq uses the OpenAI-compatible Chat Completions API (`https://api.groq.com/open
 ## Layout
 
 ```text
+app.py               Vercel FastAPI entry
+frontend/            Streamlit Community Cloud UI
 src/comet/           application package
-  cli.py             entry point
+  cli.py             CLI entry
+  web.py             JSON API (/api/process)
   ingestion/         discovery, loaders, normalization
   llm/               prompts, mock, OpenAI / Gemini / Groq adapters, factory
   models/            ComplaintCase, DocumentResult, enums
   services/          extraction, email, summary, artifacts
   workflow/          DocumentProcessor, BatchProcessor
   reporting/         CSV + run manifest
+  ui/pipeline.py     upload staging + batch for the API
 tests/               unit tests; live tests under tests/integration/
 data/samples/        fictional mixed fixtures
 docs/technical-design.md
@@ -177,24 +181,52 @@ docs/technical-design.md
 
 Default `pytest` uses the mock provider and temp directories only. It does not need an API key.
 
-## Optional dashboard (Phase 9)
+## Apps (monorepo)
 
-The Streamlit dashboard is a thin UI over the same `BatchProcessor` used by the CLI; it does not duplicate ingestion or LLM logic. Upload one `.txt`, `.pdf`, or `.docx` file; the dashboard validates the type, stages it under `tmp/`, processes only that file, then shows the extracted case, draft email, internal summary, and CSV download.
+| App | Path | Host |
+|---|---|---|
+| API + CLI | `src/comet/`, `app.py` | [Vercel Python](https://vercel.com/docs/functions/runtimes/python) |
+| Dashboard | `frontend/streamlit_app.py` | [Streamlit Community Cloud](https://share.streamlit.io/new) |
 
-```bash
-streamlit run src/comet/ui/app.py
-```
+The Streamlit app only uploads files and renders JSON. Ingestion, LLM calls, and artifacts run on the API.
 
-Use mock mode for a local demonstration. For OpenAI or Gemini, keep the relevant API key in `.env`; the dashboard deliberately has no API-key field.
-
-## Vercel
-
-[Vercel’s Python runtime](https://vercel.com/docs/functions/runtimes/python) hosts **FastAPI/WSGI**, not Streamlit. This repo’s deployable app is `app.py` (`comet.web:app`): same upload → `tmp` → `BatchProcessor` flow, with HTML results. Streamlit remains for local use.
+### Local API + UI
 
 ```bash
 pip install -e ".[dev]"
-# local check
+uvicorn app:app --reload --port 8000
+```
+
+In another terminal:
+
+```bash
+pip install -r frontend/requirements.txt
+COMET_API_URL=http://127.0.0.1:8000 streamlit run frontend/streamlit_app.py
+```
+
+Or copy `frontend/.streamlit/secrets.toml.example` to `frontend/.streamlit/secrets.toml`.
+
+### Vercel (backend)
+
+Deploy the **repo root** (not `frontend/`). Entrypoint is `app.py` (`comet.web:app`). Function timeout is 60s (`vercel.json`).
+
+Set `OPENAI_API_KEY` / `GEMINI_API_KEY` / `GROQ_API_KEY` in the Vercel project if you use those providers. Mock mode needs no keys.
+
+```bash
 python -c "from app import app; print(app.title)"
 ```
 
-Redeploy after pushing `app.py`, `vercel.json`, and FastAPI deps. Set `OPENAI_API_KEY` / `GEMINI_API_KEY` / `GROQ_API_KEY` in the Vercel project if you use those providers. Mock mode needs no keys. Function timeout is 60s (`vercel.json`).
+### Streamlit Community Cloud (frontend)
+
+On [share.streamlit.io/new](https://share.streamlit.io/new):
+
+1. Connect this GitHub repo.
+2. Main file path: `frontend/streamlit_app.py`.
+3. If Cloud asks for dependencies, use `frontend/requirements.txt`.
+4. Secrets:
+
+```toml
+COMET_API_URL = "https://YOUR_VERCEL_DEPLOYMENT.vercel.app"
+```
+
+No LLM keys in Streamlit; they stay on Vercel.

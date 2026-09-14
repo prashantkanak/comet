@@ -1,4 +1,4 @@
-"""Shared upload + batch helpers used by Streamlit and the Vercel FastAPI app."""
+"""Upload + batch helpers for the FastAPI API (and CLI-adjacent UI tests)."""
 
 import csv
 import logging
@@ -162,3 +162,30 @@ def read_text(path: str | None) -> str | None:
     if not file_path.is_file():
         return None
     return file_path.read_text(encoding="utf-8")
+
+
+def summary_to_api(summary: BatchRunSummary) -> dict:
+    """JSON payload for the Streamlit client; artifact bodies, not server paths."""
+    documents = []
+    for result in summary.results:
+        case = result.case.model_dump(mode="json") if result.case is not None else None
+        documents.append(
+            {
+                "source_file": Path(result.source_file).name,
+                "document_id": result.document_id,
+                "status": result.status.value,
+                "error_code": result.error_code,
+                "error_message": result.error_message,
+                "case": case,
+                "customer_email": read_text(result.customer_email_path) or "",
+                "case_summary": read_text(result.case_summary_path) or "",
+                "structured_data": read_text(result.structured_data_path) or "{}",
+            }
+        )
+    return {
+        "counts": summary.counts,
+        "token_usage": summary.token_usage,
+        "report_rows": display_report_rows(summary.report_path),
+        "report_csv": summary.report_path.read_text(encoding="utf-8"),
+        "documents": documents,
+    }
