@@ -22,9 +22,6 @@ from comet.workflow.batch import BatchRunSummary
 
 app = FastAPI(title="Comet AI")
 
-_PROVIDERS = ("mock", "openai", "gemini")
-
-
 def _page(*, error: str | None = None, summary: BatchRunSummary | None = None) -> str:
     results = ""
     if error:
@@ -118,19 +115,6 @@ def _page(*, error: str | None = None, summary: BatchRunSummary | None = None) -
   <form method="post" enctype="multipart/form-data">
     <label for="file">Complaint document</label>
     <input id="file" name="file" type="file" accept="{accept}" required/>
-    <details>
-      <summary>Processing options</summary>
-      <label for="provider">LLM provider</label>
-      <select id="provider" name="provider">
-        <option value="mock" selected>mock</option>
-        <option value="openai">openai</option>
-        <option value="gemini">gemini</option>
-      </select>
-      <label for="model_name">Model name (optional)</label>
-      <input id="model_name" name="model_name" type="text"/>
-      <label for="max_attempts">Maximum extraction attempts</label>
-      <input id="max_attempts" name="max_attempts" type="number" min="1" max="3" value="2"/>
-    </details>
     <button type="submit">Process file</button>
   </form>
   {results}
@@ -147,22 +131,13 @@ def home() -> str:
 @app.post("/", response_class=HTMLResponse)
 async def process_file(
     file: UploadFile = File(...),
-    provider: str = Form("mock"),
-    model_name: str = Form(""),
-    max_attempts: int = Form(2),
 ) -> HTMLResponse:
-    if provider not in _PROVIDERS:
-        return HTMLResponse(_page(error="Provider must be mock, openai, or gemini."), status_code=400)
-    attempts = min(max(max_attempts, 1), 3)
     try:
         data = await file.read()
         staged = stage_upload(file.filename or "", data, default_tmp_root())
         settings = build_settings(
             str(staged.parent),
             str(default_output_dir()),
-            provider,
-            model_name,
-            attempts,
             True,
         )
         summary = run_batch(settings)

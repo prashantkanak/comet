@@ -30,7 +30,6 @@ def test_process_runs_workflow_for_txt(tmp_path, monkeypatch):
     response = TestClient(app).post(
         "/",
         files={"file": ("case.txt", b"I was charged twice on my invoice.", "text/plain")},
-        data={"provider": "mock", "max_attempts": "2"},
     )
     assert response.status_code == 200
     assert "Results" in response.text

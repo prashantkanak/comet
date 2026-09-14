@@ -47,34 +47,47 @@ def validate_upload_filename(filename: str) -> str:
 
 
 def stage_upload(filename: str, data: bytes, tmp_root: Path | None = None) -> Path:
-    """Write the uploaded bytes into a unique tmp folder and return that path."""
-    name = validate_upload_filename(filename)
+    """Write one uploaded file into a unique tmp folder and return that path."""
+    run_dir = stage_uploads([(filename, data)], tmp_root)
+    return next(run_dir.iterdir())
+
+
+def stage_uploads(
+    files: list[tuple[str, bytes]], tmp_root: Path | None = None
+) -> Path:
+    """Write many uploads into one tmp folder and return that folder."""
+    if not files:
+        raise ConfigurationError("Choose at least one .txt, .pdf, or .docx file.")
     run_dir = Path(tmp_root or default_tmp_root()) / uuid4().hex
     run_dir.mkdir(parents=True, exist_ok=True)
-    dest = run_dir / name
-    dest.write_bytes(data)
-    return dest
+    used: set[str] = set()
+    for filename, data in files:
+        name = validate_upload_filename(filename)
+        dest_name = name
+        index = 1
+        while dest_name.lower() in used:
+            dest_name = f"{Path(name).stem}_{index}{Path(name).suffix}"
+            index += 1
+        used.add(dest_name.lower())
+        (run_dir / dest_name).write_bytes(data)
+    return run_dir
 
 
 def build_settings(
     input_dir: str,
     output_dir: str,
-    provider: str,
-    model_name: str,
-    max_attempts: int,
     overwrite: bool,
 ) -> Settings:
-    """Build runtime settings from the UI without exposing API keys in it."""
-    overrides: dict[str, object] = {
-        "input_dir": Path(input_dir).expanduser(),
-        "output_dir": Path(output_dir).expanduser(),
-        "llm_provider": provider,
-        "max_llm_attempts": max_attempts,
-        "overwrite": overwrite,
-    }
-    if model_name.strip():
-        overrides["model_name"] = model_name.strip()
-    return Settings(**overrides)
+    """Build UI settings from the deployment-owned environment defaults.
+
+    Provider, model, credentials, and retry settings stay in `.env`; they are
+    intentionally not user-facing controls.
+    """
+    return Settings(
+        input_dir=Path(input_dir).expanduser(),
+        output_dir=Path(output_dir).expanduser(),
+        overwrite=overwrite,
+    )
 
 
 def run_batch(settings: Settings) -> BatchRunSummary:
@@ -99,6 +112,17 @@ def report_rows(report_path: Path) -> list[dict[str, str]]:
     """Read the existing workflow CSV for the dashboard table."""
     with Path(report_path).open(encoding="utf-8", newline="") as handle:
         return list(csv.DictReader(handle))
+
+
+def display_report_rows(report_path: Path) -> list[dict[str, str]]:
+    """CSV rows for the UI: source_file is the basename only."""
+    rows = []
+    for row in report_rows(report_path):
+        displayed = dict(row)
+        source = displayed.get("source_file", "")
+        displayed["source_file"] = Path(source).name if source else ""
+        rows.append(displayed)
+    return rows
 
 
 def read_text(path: str | None) -> str | None:
