@@ -1,6 +1,7 @@
-"""Batch orchestration: sequential documents, CSV, run manifest, continuation."""
+"""Batch orchestration: parallel documents, CSV, run manifest, continuation."""
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,6 +40,7 @@ class BatchProcessor:
         *,
         overwrite: bool = False,
         max_attempts: int = 2,
+        max_document_workers: int = 4,
         llm_provider: str = "mock",
         model_name: str | None = None,
     ) -> None:
@@ -47,6 +49,7 @@ class BatchProcessor:
         self.provider = provider
         self.overwrite = overwrite
         self.max_attempts = max_attempts
+        self.max_document_workers = max(1, max_document_workers)
         self.llm_provider = llm_provider
         self.model_name = model_name or getattr(provider, "model_name", None)
 
@@ -70,34 +73,22 @@ class BatchProcessor:
             len(unsupported),
         )
 
-        results: list[DocumentResult] = []
-        with DocumentProcessor(
-            self.input_dir,
-            self.output_dir,
-            self.provider,
-            overwrite=self.overwrite,
-            max_attempts=self.max_attempts,
-        ) as processor:
-            for path in paths:
-                try:
-                    results.append(processor.process(path))
-                except Exception:
-                    doc_id = build_document_id(path, self.input_dir)
-                    logger.exception(
-                        "batch_item_unexpected document_id=%s file=%s",
-                        doc_id,
-                        path.name,
-                    )
-                    now = datetime.now(timezone.utc)
-                    results.append(
-                        DocumentResult(
-                            source_file=str(path),
-                            document_id=doc_id,
-                            status=ProcessingStatus.FAILED,
-                            error_code="DOCUMENT_PROCESS_ERROR",
-                            error_message="DOCUMENT_PROCESS_ERROR",
-                            started_at=now,
-                            completed_at=now,
+        workers = min(self.max_document_workers, max(1, len(paths)))
+        downstream_workers = max(2, workers * 2)
+        with ThreadPoolExecutor(max_workers=downstream_workers) as downstream:
+            with DocumentProcessor(
+                self.input_dir,
+                self.output_dir,
+                self.provider,
+                overwrite=self.overwrite,
+                max_attempts=self.max_attempts,
+                executor=downstream,
+            ) as processor:
+                with ThreadPoolExecutor(max_workers=workers) as doc_pool:
+                    results = list(
+                        doc_pool.map(
+                            lambda path: self._process_one(processor, path),
+                            paths,
                         )
                     )
 
@@ -108,6 +99,7 @@ class BatchProcessor:
             "llm_provider": self.llm_provider,
             "model_name": self.model_name,
             "max_llm_attempts": self.max_attempts,
+            "max_document_workers": self.max_document_workers,
             "input_dir": str(self.input_dir),
             "output_dir": str(self.output_dir),
             "overwrite": self.overwrite,
@@ -149,3 +141,26 @@ class BatchProcessor:
             counts=counts,
             token_usage=token_usage,
         )
+
+    def _process_one(
+        self, processor: DocumentProcessor, path: Path
+    ) -> DocumentResult:
+        try:
+            return processor.process(path)
+        except Exception:
+            doc_id = build_document_id(path, self.input_dir)
+            logger.exception(
+                "batch_item_unexpected document_id=%s file=%s",
+                doc_id,
+                path.name,
+            )
+            now = datetime.now(timezone.utc)
+            return DocumentResult(
+                source_file=str(path),
+                document_id=doc_id,
+                status=ProcessingStatus.FAILED,
+                error_code="DOCUMENT_PROCESS_ERROR",
+                error_message="DOCUMENT_PROCESS_ERROR",
+                started_at=now,
+                completed_at=now,
+            )

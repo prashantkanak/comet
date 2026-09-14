@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
     groq_api_key: str | None = Field(default=None, alias="GROQ_API_KEY")
     max_llm_attempts: int = Field(default=2, ge=1, alias="MAX_LLM_ATTEMPTS")
+    max_document_workers: int = Field(default=4, ge=1, alias="MAX_DOCUMENT_WORKERS")
     input_dir: Path = Field(default=Path("data"), alias="INPUT_DIR")
     output_dir: Path = Field(default=Path("output"), alias="OUTPUT_DIR")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
@@ -79,6 +80,7 @@ class Settings(BaseSettings):
             "llm_provider": self.llm_provider,
             "model_name": self.model_name,
             "max_llm_attempts": self.max_llm_attempts,
+            "max_document_workers": self.max_document_workers,
             "input_dir": str(self.input_dir),
             "output_dir": str(self.output_dir),
             "log_level": self.log_level,

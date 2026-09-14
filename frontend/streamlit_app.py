@@ -11,7 +11,7 @@ import streamlit as st
 PRODUCT_NAME = "COMET"
 PRODUCT_FULL_FORM = "Complaint Orchestration & Management Engine for Triage"
 UPLOAD_TYPES = ["txt", "pdf", "docx"]
-PROCESS_TIMEOUT = 60.0
+PROCESS_TIMEOUT = 180.0
 
 
 def _api_base() -> str:
@@ -283,7 +283,6 @@ def main() -> None:
     if isinstance(payload, dict) and "documents" in payload:
         _display_results(payload)
 
-    st.caption(f"{PRODUCT_NAME}  ·  backend {base}")
 
 
 if __name__ == "__main__":

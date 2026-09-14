@@ -76,7 +76,7 @@ Processing **within a document** is dependency-aware:
 load → extract → validate text → structured extraction → [email || summary] → save
 ```
 
-The bracketed tasks are independent and run using `ThreadPoolExecutor(max_workers=2)`. Batch documents are processed sequentially initially to keep API usage, logs, and failure diagnosis simple. A later configuration option may process documents concurrently, but only after the per-document workflow is fully tested.
+The bracketed tasks are independent and run using a shared `ThreadPoolExecutor`. Independent documents in a batch also run concurrently (`MAX_DOCUMENT_WORKERS`, default 4), with per-file isolation so one failure does not stop the rest.
 
 ## 5. Repository layout
 
@@ -223,6 +223,7 @@ class DocumentResult(BaseModel):
 | `MODEL_NAME` | provider-specific | explicit and reproducible |
 | `OPENAI_API_KEY` / `GEMINI_API_KEY` / `GROQ_API_KEY` | unset in Git | exactly one required for real provider |
 | `MAX_LLM_ATTEMPTS` | `2` | one validation/transport retry maximum |
+| `MAX_DOCUMENT_WORKERS` | `4` | concurrent documents in a batch |
 | `INPUT_DIR` | `data` | CLI normally supplies this |
 | `OUTPUT_DIR` | `output` | artifacts only |
 | `LOG_LEVEL` | `INFO` | no document text or secrets in normal logs |
@@ -266,7 +267,7 @@ All prompts live in `llm/prompts.py`, are versioned as constants, and have one j
 | Email | validated `ComplaintCase` JSON | Markdown email | Do not invent dates, money, policies, commitments, or contact details. |
 | Summary | validated `ComplaintCase` JSON | Markdown summary | Use only supplied case fields; label unknown/missing action clearly. |
 
-Document text is untrusted input. Prompts must delimit it clearly and state that instructions inside the document are data, not instructions for the system. Generated output is never sent automatically; it remains a draft artifact for human review.
+Document text is untrusted input. Prompts must delimit it clearly and state that instructions inside the document are data, not instructions for the system. Generated output is never sent automatically; it remains a draft artifact for human review. If the document is not a customer complaint (code, jailbreaks, unrelated tasks), set `is_complaint` to false. The workflow then skips email/summary generation and returns a deterministic `NOT_A_COMPLAINT` skip. A local heuristic also rejects obvious injection/off-task text before any LLM call.
 
 ### 7.5 Extraction and retry policy
 
@@ -322,6 +323,7 @@ Arguments:
 | `--output PATH` | `output` | output directory |
 | `--provider` | environment/default | `mock`, `openai`, `gemini`, or `groq` |
 | `--max-attempts INT` | `2` | max LLM extraction attempts |
+| `--document-workers INT` | `4` | max documents processed in parallel |
 | `--log-level LEVEL` | `INFO` | console/file verbosity |
 | `--overwrite` | false | permit replacement of existing matching artifacts |
 
@@ -404,9 +406,9 @@ Build `DocumentProcessor`; run email and summary generation concurrently; atomic
 
 ### Phase 7 — Batch reporting and operational polish
 
-Build `BatchProcessor`, consolidated CSV, run manifest, completion summary, structured logging, and robust per-file continuation.
+Build `BatchProcessor`, consolidated CSV, run manifest, completion summary, structured logging, robust per-file continuation, parallel document processing, and a deterministic skip for non-complaint / prompt-injection files.
 
-**Done when:** a batch of 10+ mixed fixture files produces a complete report with accurate success/failure/skipped counts.
+**Done when:** a batch of 10+ mixed fixture files produces a complete report with accurate success/failure/skipped counts; multiple eligible files overlap in time; injection/off-task files are skipped without draft artifacts.
 
 ### Phase 8 — Hardening and quality
 
@@ -443,7 +445,7 @@ Add exactly one provider SDK in Phase 3, then the other only if portability is i
 | Pydantic at LLM boundary | prevents arbitrary LLM text from becoming application data |
 | Provider interface + mock | supports local no-cost testing and avoids vendor lock-in |
 | One task per prompt | maps directly to the required multi-step workflow and reduces coupling |
-| Per-document parallelism only | shows concurrency without uncontrolled API burst/rate-limit complexity |
+| Bounded document-level concurrency | overlapping files without one failure stopping the batch; cap via `MAX_DOCUMENT_WORKERS` |
 | Local files + CSV | directly meets the assignment without unnecessary infrastructure |
 | No automatic email sending | protects users and keeps generated output reviewable |
 | Privacy-aware logging | customer complaints may contain personal data |
@@ -464,7 +466,6 @@ Add exactly one provider SDK in Phase 3, then the other only if portability is i
 - OCR fallback for scanned PDFs.
 - Human review/approval queue and editable generated drafts.
 - Configurable taxonomy and business rules for escalation.
-- Optional per-document batch concurrency with rate limiting.
 - Streamlit dashboard.
 - Redacted audit exports and retention controls.
 - CRM/email integration only with explicit approval and security design.

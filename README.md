@@ -52,7 +52,7 @@ Document discovery ──► load + extract text ──► normalize + validate 
                          artifacts + final_report.csv + run_manifest.json
 ```
 
-Per document: load → extract → `[email || summary]` on a two-worker pool → atomic write. Documents in a batch run sequentially.
+Per document: load → extract → `[email || summary]` on a shared worker pool → atomic write. Independent documents in a batch run in parallel (`MAX_DOCUMENT_WORKERS`, default 4). Files that are not customer complaints (including prompt-injection / off-task text) are skipped with a fixed `NOT_A_COMPLAINT` message and never get email or summary drafts.
 
 | Decision | Why |
 |---|---|
@@ -77,6 +77,7 @@ python -m comet.cli --input data/samples --output output --provider mock --overw
 | `--output` | `output` | Artifact root |
 | `--provider` | `mock` | `mock`, `openai`, `gemini`, or `groq` |
 | `--max-attempts` | `2` | Extraction attempts (one repair/retry) |
+| `--document-workers` | `4` | Max documents processed in parallel |
 | `--log-level` | `INFO` | Console/file verbosity |
 | `--overwrite` | off | Replace existing artifacts for the same document id |
 

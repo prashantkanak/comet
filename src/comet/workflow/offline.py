@@ -21,6 +21,7 @@ def run_offline_pipeline(
         provider,
         overwrite=overwrite,
         max_attempts=max_attempts,
+        max_document_workers=4,
         llm_provider="mock",
         model_name=getattr(provider, "model_name", None),
     ).run()

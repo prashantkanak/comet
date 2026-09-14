@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import threading
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -11,20 +12,23 @@ class TokenUsage:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def add(self, prompt: int, completion: int, total: int) -> None:
-        self.calls += 1
-        self.prompt_tokens += prompt
-        self.completion_tokens += completion
-        self.total_tokens += total or (prompt + completion)
+        with self._lock:
+            self.calls += 1
+            self.prompt_tokens += prompt
+            self.completion_tokens += completion
+            self.total_tokens += total or (prompt + completion)
 
     def as_dict(self) -> dict[str, int]:
-        return {
-            "calls": self.calls,
-            "prompt_tokens": self.prompt_tokens,
-            "completion_tokens": self.completion_tokens,
-            "total_tokens": self.total_tokens,
-        }
+        with self._lock:
+            return {
+                "calls": self.calls,
+                "prompt_tokens": self.prompt_tokens,
+                "completion_tokens": self.completion_tokens,
+                "total_tokens": self.total_tokens,
+            }
 
 
 def usage_from_response(response: object) -> tuple[int, int, int] | None:

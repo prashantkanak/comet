@@ -2,6 +2,7 @@
 
 import re
 
+from comet.ingestion.scope import is_out_of_scope
 from comet.llm.drafts import case_summary_from_case, customer_email_from_case
 from comet.models import CaseStatus, ComplaintCase, ComplaintCategory
 
@@ -45,7 +46,7 @@ class MockLLMProvider:
             "complaint_category": category,
             "issue_description": document_text[:1000],
             "resolution_provided": None,
-            "is_complaint": True,
+            "is_complaint": not is_out_of_scope(document_text),
             "escalation_required": any(
                 token in lower for token in ("urgent", "second", "never received")
             ),

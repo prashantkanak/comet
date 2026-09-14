@@ -101,6 +101,66 @@ def test_batch_of_twelve_mixed_files_has_accurate_counts(tmp_path):
     assert names["billing.txt"].status is ProcessingStatus.SUCCESS
 
 
+def test_batch_processes_documents_in_parallel(tmp_path):
+    import threading
+    import time
+
+    from comet.models import ComplaintCase
+
+    input_dir = tmp_path / "in"
+    output_dir = tmp_path / "out"
+    input_dir.mkdir()
+    (input_dir / "a.txt").write_text("Charged twice on my invoice.")
+    (input_dir / "b.txt").write_text("The package never arrived. Tracking says delivered.")
+
+    starts: list[float] = []
+    lock = threading.Lock()
+    gate = threading.Barrier(2)
+
+    class _SlowExtract:
+        def extract_case(self, document_text: str, *, repair: bool = False) -> ComplaintCase:
+            del document_text, repair
+            with lock:
+                starts.append(time.monotonic())
+            gate.wait(timeout=2)
+            time.sleep(0.05)
+            return ComplaintCase.model_validate(
+                {
+                    "issue_description": "Charged twice.",
+                    "is_complaint": True,
+                    "escalation_required": False,
+                    "supporting_document_available": False,
+                    "complaint_category": "billing",
+                    "overall_case_status": "open",
+                }
+            )
+
+        def generate_customer_email(self, case: ComplaintCase) -> str:
+            del case
+            return "# Subject: ok\n\nDear Customer,\n"
+
+        def generate_case_summary(self, case: ComplaintCase) -> str:
+            del case
+            return (
+                "# Case summary\n\n## Overview\nok\n\n## Issue\nok\n\n"
+                "## Action\nok\n\n## Status\nok\n\n## Next action\nok\n"
+            )
+
+    summary = BatchProcessor(
+        input_dir,
+        output_dir,
+        _SlowExtract(),
+        overwrite=True,
+        max_document_workers=2,
+        llm_provider="mock",
+        model_name="mock",
+    ).run()
+
+    assert summary.counts["successful"] == 2
+    assert len(starts) == 2
+    assert abs(starts[0] - starts[1]) < 0.2
+
+
 def test_public_config_omits_secrets():
     settings = Settings(llm_provider="openai", openai_api_key="sk-secret")
     dumped = settings.public_config()

@@ -50,6 +50,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum LLM extraction attempts (default: 2)",
     )
     parser.add_argument(
+        "--document-workers",
+        type=int,
+        default=None,
+        help="Max documents to process in parallel (default: 4)",
+    )
+    parser.add_argument(
         "--log-level",
         default=None,
         help="Logging verbosity (default: INFO)",
@@ -78,6 +84,8 @@ def settings_from_args(args: argparse.Namespace) -> Settings:
         overrides["llm_provider"] = args.provider
     if args.max_attempts is not None:
         overrides["max_llm_attempts"] = args.max_attempts
+    if args.document_workers is not None:
+        overrides["max_document_workers"] = args.document_workers
     if args.log_level is not None:
         overrides["log_level"] = args.log_level
 
@@ -117,6 +125,7 @@ def main(argv: list[str] | None = None) -> int:
             provider,
             overwrite=settings.overwrite,
             max_attempts=settings.max_llm_attempts,
+            max_document_workers=settings.max_document_workers,
             llm_provider=settings.llm_provider,
             model_name=settings.model_name or getattr(provider, "model_name", None),
         ).run()

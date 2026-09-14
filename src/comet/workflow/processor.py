@@ -9,6 +9,11 @@ from comet.exceptions import IngestionError, LLMError
 from comet.ids import build_document_id
 from comet.ingestion.discovery import SUPPORTED_EXTENSIONS
 from comet.ingestion.loaders import load_document
+from comet.ingestion.scope import (
+    NOT_A_COMPLAINT_CODE,
+    NOT_A_COMPLAINT_MESSAGE,
+    is_out_of_scope,
+)
 from comet.llm.base import LLMProvider
 from comet.models import ComplaintCase, DocumentResult, ProcessingStatus
 from comet.services.artifact_service import artifacts_exist, write_success_artifacts
@@ -100,9 +105,27 @@ class DocumentProcessor:
             )
 
         try:
+            if is_out_of_scope(text):
+                return self._finish(
+                    source,
+                    doc_id,
+                    started,
+                    status=ProcessingStatus.SKIPPED,
+                    error_code=NOT_A_COMPLAINT_CODE,
+                    error_message=NOT_A_COMPLAINT_MESSAGE,
+                )
             case = extract_case(
                 self.provider, text, max_attempts=self.max_attempts
             )
+            if not case.is_complaint:
+                return self._finish(
+                    source,
+                    doc_id,
+                    started,
+                    status=ProcessingStatus.SKIPPED,
+                    error_code=NOT_A_COMPLAINT_CODE,
+                    error_message=NOT_A_COMPLAINT_MESSAGE,
+                )
             email_md, summary_md = self._generate_downstream(case)
             paths = write_success_artifacts(
                 self.output_dir,

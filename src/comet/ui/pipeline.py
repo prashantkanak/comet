@@ -133,6 +133,7 @@ def run_batch(settings: Settings) -> BatchRunSummary:
         provider,
         overwrite=settings.overwrite,
         max_attempts=settings.max_llm_attempts,
+        max_document_workers=settings.max_document_workers,
         llm_provider=settings.llm_provider,
         model_name=model_name,
     ).run()
